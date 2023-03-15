@@ -1,0 +1,15 @@
+{
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "block_creations": false,
+    "enforce_admins": false,
+    "required_conversation_resolution": false,
+    "required_linear_history": true,
+    "required_pull_request_reviews": null,
+    "required_signatures": false,
+    "required_status_checks": {
+        "strict": true,
+        "checks": []
+    },
+    "restrictions": null
+}
