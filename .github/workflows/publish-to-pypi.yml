@@ -1,0 +1,53 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Publish Python Package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4.5.0
+      with:
+        python-version: '3.x'
+
+    - name: Set up PDM
+      uses: pdm-project/setup-pdm@v3
+      with:
+        python-version:  '3.x'
+
+    - name: Resolving dependencies
+      run: pdm lock -v
+
+    # Drafts your next Release notes as Pull Requests are merged into "master"
+    - name: Draft release notes
+      uses: release-drafter/release-drafter@v5.23.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build package
+      run: python -m build
+
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@c7f29f7adef1a245bd91520e94867e5c6eedddcc
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
