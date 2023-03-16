@@ -27,7 +27,7 @@ format:
 	pdm run pyupgrade --exit-zero-even-if-changed --py39-plus
 	pdm run isort --settings-path pyproject.toml ./
 	pdm run black --config pyproject.toml ./
-	pdm run eof ./
+	pdm run eof ./ --git
 	pdm run ruff check . --fix
 
 #* Testing

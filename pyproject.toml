@@ -25,7 +25,9 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "GitPython>=3.1.31",
+]
 
 [tool.pdm]
 version = {source = "scm"}
