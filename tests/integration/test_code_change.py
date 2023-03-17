@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pycodegen import vc
+from pycodegen import todo, vc
 
 work_dir = Path("C:\\Users\\myron\\PycharmProjects")
 host = "https://github.com"
@@ -13,9 +13,6 @@ test_file = "test_file.txt"
 def test_clone_checkout_and_commit() -> None:
     """
     Test that we can clone, check out a branch, and commit to it.
-    Returns
-    -------
-    None
     """
     repo = vc.use_repo(work_dir, test_repo, owner)
     assert repo
@@ -38,3 +35,12 @@ def test_clone_checkout_and_commit() -> None:
     assert repo.active_branch.name == "main"
 
     vc.push_to_origin(repo)
+
+
+def test_get_next_task() -> None:
+    """
+    Test that we can get the next task to do
+    """
+    reponame = "myrontuttle/pycodegen"
+    next_task = todo.get_next_task(reponame)
+    assert next_task and next_task.title == "Pull issue from GitHub"
