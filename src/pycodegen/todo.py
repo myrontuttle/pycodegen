@@ -51,7 +51,8 @@ def get_next_issue(repo_name: str) -> Optional[Issue]:
         return None
 
     # TODO: Add logic to determine which open issue is highest priority
-    return open_issues[0]
+    # Currently getting the oldest open issue
+    return open_issues.reversed[0]
 
 
 def issue_title_to_branch_name(issue: Issue) -> str:
