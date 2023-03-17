@@ -34,6 +34,7 @@ def use_repo(work_dir: Path, repo_name: str, username: str) -> Repo:
     if repo_path.exists():
         try:
             repo = git.Repo(repo_path)
+            repo.git.fetch()
             return repo
         except git.exc.InvalidGitRepositoryError:
             logger.warning(f"No repo at {repo_path}. Initializing new repo.")
@@ -47,21 +48,6 @@ def use_repo(work_dir: Path, repo_name: str, username: str) -> Repo:
             return repo
         except git.exc.InvalidGitRepositoryError:
             logger.warning(f"No remote repo at {repo_url}")
-
-
-def update_repo(repo: Repo) -> None:
-    """
-    Updates a repo from remote origin
-    Parameters
-    ----------
-    repo
-
-    Returns
-    -------
-    None
-    """
-    repo.remotes.origin.pull()
-    # TODO: Add info to indicate status
 
 
 def use_branch(repo: Repo, branch_name: str) -> None:
@@ -80,6 +66,10 @@ def use_branch(repo: Repo, branch_name: str) -> None:
     if branch_name not in repo.branches:
         repo.git.branch(branch_name)
     repo.git.checkout(branch_name)
+
+
+def get_active_branch_name(repo: Repo) -> str:
+    return repo.active_branch.name
 
 
 def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
@@ -101,6 +91,7 @@ def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
     else:
         repo.index.add(files)
     repo.index.commit(commit_msg)
+    # TODO: Add error handling if pre-commit fails
 
 
 def safe_merge(repo: Repo, branch_name: str) -> None:
