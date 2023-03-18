@@ -90,8 +90,14 @@ def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
         repo.git.add(all=True)
     else:
         repo.index.add(files)
-    repo.index.commit(commit_msg)
-    # TODO: Add error handling if pre-commit fails
+    try:
+        repo.git.commit(m=commit_msg)
+        # repo.index.commit(commit_msg)
+    except git.exc.HookExecutionError:
+        logger.warning("Error executing hook. Trying without pre-commit")
+        repo.git.commit(m=commit_msg, no_verify=True)
+    except git.exc.GitCommandError:
+        logger.warning("Git commit command error.")
 
 
 def safe_merge(repo: Repo, branch_name: str) -> None:

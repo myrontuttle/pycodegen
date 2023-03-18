@@ -44,7 +44,7 @@ def test_get_next_issue() -> None:
     """
     repo_owner = "myrontuttle"
     repo_name = "pycodegen"
-    next_issue = todo.get_next_issue(f"{repo_owner}/{repo_name}")
+    next_issue = todo.get_next_issue(repo_owner, repo_name)
     assert next_issue and next_issue.title == "Pull issue from GitHub"
 
 
@@ -55,3 +55,14 @@ def test_code_start() -> None:
     coder = Coder(owner, test_repo)
     coder.open_next_issue()
     assert sc.get_active_branch_name(coder.repo) == "feat/3/Test-an-issue"
+
+
+def test_code_stop() -> None:
+    """
+    Test stopping coding
+    """
+    commit_msg = "Tested an issue"
+    coder = Coder(owner, test_repo)
+    coder.complete_active_issue(commit_msg)
+    assert sc.get_active_branch_name(coder.repo) == "main"
+    assert not coder.repo.is_dirty(untracked_files=True)
