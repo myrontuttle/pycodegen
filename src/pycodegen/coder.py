@@ -26,13 +26,16 @@ class Coder:
     host = "https://github.com"
     owner = "myrontuttle"
 
-    def __init__(self, repo_name: str):
+    def __init__(self, owner_name: str, repo_name: str):
         """
         Initializes a coder on a repo
         Parameters
         ----------
+        owner_name
         repo_name
         """
+        self.repo_owner = owner_name
+        self.repo_name = repo_name
         self.repo = sc.use_repo(self.work_dir, repo_name, self.owner)
         self.repo_path = self.work_dir.joinpath(repo_name)
         venv_path = self.repo_path.joinpath(".venv")
@@ -40,23 +43,56 @@ class Coder:
             os.chdir(self.repo_path)
             cp_setup = subprocess.run(
                 [
+                    "pdm",
+                    "venv",
+                    "create",
+                    "3.9",
+                    "-v",
+                ],
+                capture_output=True,
+            )
+            cp_setup2 = subprocess.run(
+                [
+                    "pdm",
+                    "venv",
+                    "activate",
+                    "in-project",
+                ],
+                capture_output=True,
+                shell=True,
+            )
+            subprocess.run(
+                [
+                    "pdm",
+                    "use",
+                    "3.9",
+                    "-i",
+                    "-f",
+                    "-vv",
+                ],
+                capture_output=True,
+            )
+            subprocess.run(
+                [
                     "make",
                     "install",
                 ],
                 capture_output=True,
             )
-            if cp_setup.returncode == 0:
+            if cp_setup2.returncode == 0:
                 # May be too much to push to logs
                 logger.info(cp_setup.stdout)
             else:
                 logger.error(cp_setup.stderr)
 
     def open_next_issue(self) -> Optional[str]:
-        repo_name = self.repo.__str__()
-        next_issue = todo.get_next_issue(repo_name)
+        next_issue = todo.get_next_issue(self.repo_owner, self.repo_name)
         if not next_issue:
             return None
-        sc.use_branch(self.repo, todo.issue_title_to_branch_name(next_issue))
+        branch_name = todo.issue_title_to_branch_name(
+            self.repo_owner, self.repo_name, next_issue
+        )
+        sc.use_branch(self.repo, branch_name)
         return next_issue.body
 
     def complete_active_issue(self, commit_msg: str):
@@ -92,17 +128,19 @@ def code():
 
 
 @code.command()
+@click.argument("repo_owner")
 @click.argument("repo_name")
-def start(repo_name: str) -> None:
-    coder = Coder(repo_name)
+def start(repo_owner: str, repo_name: str) -> None:
+    coder = Coder(repo_owner, repo_name)
     coder.open_next_issue()
 
 
 @code.command()
+@click.argument("repo_owner")
 @click.argument("repo_name")
 @click.argument("commit_msg")
-def stop(repo_name: str, commit_msg: str) -> None:
-    coder = Coder(repo_name)
+def stop(repo_owner: str, repo_name: str, commit_msg: str) -> None:
+    coder = Coder(repo_owner, repo_name)
     coder.complete_active_issue(commit_msg)
 
 

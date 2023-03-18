@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from pycodegen import sc, todo
+from pycodegen.coder import Coder
 
 work_dir = Path("C:\\Users\\myron\\PycharmProjects")
 host = "https://github.com"
@@ -41,6 +42,16 @@ def test_get_next_issue() -> None:
     """
     Test that we can get the next task to do
     """
-    reponame = "myrontuttle/pycodegen"
-    next_issue = todo.get_next_issue(reponame)
+    repo_owner = "myrontuttle"
+    repo_name = "pycodegen"
+    next_issue = todo.get_next_issue(f"{repo_owner}/{repo_name}")
     assert next_issue and next_issue.title == "Pull issue from GitHub"
+
+
+def test_code_start() -> None:
+    """
+    Test starting coding
+    """
+    coder = Coder(owner, test_repo)
+    coder.open_next_issue()
+    assert sc.get_active_branch_name(coder.repo) == "feat/3/Test-an-issue"
