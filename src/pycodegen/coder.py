@@ -86,6 +86,16 @@ class Coder:
             else:
                 logger.error(cp_setup.stderr)
 
+    def open_issue(self, issue_num: int) -> Optional[str]:
+        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        if not issue:
+            return None
+        branch_name = todo.issue_title_to_branch_name(
+            self.repo_owner, self.repo_name, issue
+        )
+        sc.use_branch(self.repo, branch_name)
+        return issue.body
+
     def open_next_issue(self) -> Optional[str]:
         next_issue = todo.get_next_issue(self.repo_owner, self.repo_name)
         if not next_issue:
@@ -131,9 +141,13 @@ def code():
 @code.command()
 @click.argument("repo_owner")
 @click.argument("repo_name")
-def start(repo_owner: str, repo_name: str) -> None:
+@click.option("-i", "--issue_num", type=int)
+def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
     coder = Coder(repo_owner, repo_name)
-    coder.open_next_issue()
+    if issue_num:
+        coder.open_issue(issue_num)
+    else:
+        coder.open_next_issue()
 
 
 @code.command()

@@ -53,7 +53,7 @@ def test_code_start() -> None:
     Test starting coding
     """
     coder = Coder(owner, test_repo)
-    coder.open_next_issue()
+    coder.open_issue(3)
     assert sc.get_active_branch_name(coder.repo) == "feat/3/Test-an-issue"
 
 

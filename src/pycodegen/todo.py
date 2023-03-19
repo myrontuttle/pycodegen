@@ -4,6 +4,7 @@ import logging
 import os
 
 from github import Github
+from github.GithubException import GithubException
 from github.Issue import Issue
 from github.Repository import Repository
 
@@ -62,6 +63,33 @@ def get_next_issue(repo_owner: str, repo_name: str) -> Optional[Issue]:
     # Currently getting the oldest open issue
     next_open_issue = open_issues[0]
     return next_open_issue
+
+
+def get_issue(
+    repo_owner: str, repo_name: str, issue_num: int
+) -> Optional[Issue]:
+    """
+    Get a specific task to do for repo
+
+    Parameters
+    ----------
+    repo_owner
+    repo_name
+    issue_num
+
+    Returns
+    -------
+    GitHub Issue representing the issue specified (None if no issue with
+    that number)
+    """
+    repo = get_repo(repo_owner, repo_name)
+    if not repo:
+        return None
+    try:
+        return repo.get_issue(issue_num)
+    except GithubException as ge:
+        logger.error(ge)
+        return None
 
 
 def issue_title_to_branch_name(
