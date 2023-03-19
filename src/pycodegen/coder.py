@@ -39,6 +39,7 @@ class Coder:
         self.repo = sc.use_repo(self.work_dir, repo_name, self.owner)
         self.repo_path = self.work_dir.joinpath(repo_name)
         venv_path = self.repo_path.joinpath(".venv")
+        # TODO: Use appropriate python version in following subprocesses
         if not venv_path.exists():
             os.chdir(self.repo_path)
             cp_setup = subprocess.run(
@@ -60,7 +61,7 @@ class Coder:
                 ],
                 capture_output=True,
                 shell=True,
-            )
+            )  # nosec B602
             subprocess.run(
                 [
                     "pdm",
