@@ -139,6 +139,9 @@ class Coder:
             return
         branch_name = sc.get_active_branch_name(self.repo)
         # TODO: Make commit msg based on branch_name and work done
+        issue_num = todo.issue_num_from_branch_name(branch_name)
+        if issue_num:
+            commit_msg = "Fixes #" + str(issue_num) + ". " + commit_msg
         git_response_code = sc.add_and_commit(self.repo, ["."], commit_msg)
         if git_response_code != 0:
             return

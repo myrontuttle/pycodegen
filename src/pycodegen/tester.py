@@ -71,6 +71,8 @@ def create_feature(repo_path: Path, issue: Issue) -> Path:
             with open(feature_file_path, "a") as fp:
                 fp.write("\n\n  ")
                 fp.writelines(scenarios)
+        else:
+            logger.info("No new scenarios to add.")
     else:
         with open(feature_file_path, "w") as fp:
             fp.write("Feature: " + issue.title + "\n")
@@ -179,7 +181,7 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
     )
     if cp_step_def.returncode == 0:
         with open(test_path, "w") as tp:
-            tp.write(cp_step_def.stdout.decode("UTF-8"))
+            tp.write(cp_step_def.stdout.decode("UTF-8", errors="ignore"))
         return test_path
     else:
         logger.error(cp_step_def.stderr)

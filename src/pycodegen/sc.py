@@ -95,15 +95,16 @@ def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> int:
         # repo.index.commit(commit_msg)
     except git.exc.HookExecutionError as hee:
         logger.warning(
-            f"Error executing hook.\n{hee}\nTrying without " f"pre-commit."
+            f"Error executing hook.\n{str(hee)}\nTrying without "
+            f"pre-commit."
         )
         try:
             repo.git.commit(m=commit_msg, no_verify=True)
         except git.exc.GitCommandError as gce:
-            logger.warning("Git commit command error: " + gce)
+            logger.warning("Git commit command error: " + str(gce))
             return 1
     except git.exc.GitCommandError as gce:
-        logger.warning("Git commit command error: " + gce)
+        logger.warning("Git commit command error: " + str(gce))
         return 1
     return 0
 
@@ -156,3 +157,18 @@ def push_to_origin(repo: Repo) -> None:
     repo.remotes.origin.push("main")
     # TODO: Get a response that can be tested. Tried PushInfo, but PyCharm
     # couldn't handle it.
+
+
+def get_last_commit_msg(repo: Repo) -> str:
+    """
+    Get the last commit message
+    Parameters
+    ----------
+    repo
+
+    Returns
+    -------
+    String of last commit message
+    """
+    head_commit = repo.head.commit
+    return head_commit.message
