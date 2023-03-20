@@ -106,6 +106,12 @@ class Coder:
         if not issue:
             return None
 
+        # Pull repo
+        if self.repo.active_branch.name == "main":
+            self.repo.git.pull()
+        else:
+            self.repo.git.fetch()
+
         # Checkout git branch
         branch_name = todo.issue_title_to_branch_name(
             self.repo_owner, self.repo_name, issue

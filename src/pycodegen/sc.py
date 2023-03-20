@@ -34,12 +34,12 @@ def use_repo(work_dir: Path, repo_name: str, username: str) -> Repo:
     if repo_path.exists():
         try:
             repo = git.Repo(repo_path)
-            repo.git.fetch()
             return repo
         except git.exc.InvalidGitRepositoryError:
             logger.warning(f"No repo at {repo_path}. Initializing new repo.")
             repo = git.Repo.init(repo_path)
             return repo
+
     else:
         logger.info(f"Cloning repo into {repo_path}")
         repo_url = f"git@{github_host}:{username}/{repo_name}"

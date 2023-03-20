@@ -139,12 +139,12 @@ def issue_num_from_branch_name(branch_name: str) -> Optional[int]:
         try:
             issue_num = int(issue_split[1])
         except ValueError as ve:
-            logger.error(
+            logger.warning(
                 "Can't parse issue number from branch name: " + str(ve)
             )
             return None
         else:
             return issue_num
     else:
-        logger.error("No issue number found in branch name.")
+        logger.warning("No issue number found in branch name.")
         return None
