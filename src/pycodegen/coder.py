@@ -6,8 +6,9 @@ import subprocess
 from pathlib import Path
 
 import click
+from github.Issue import Issue
 
-from pycodegen import sc, todo
+from pycodegen import sc, tester, todo
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +25,6 @@ class Coder:
 
     work_dir = Path("C:\\Users\\myron\\PycharmProjects")
     host = "https://github.com"
-    owner = "myrontuttle"
 
     def __init__(self, owner_name: str, repo_name: str):
         """
@@ -36,8 +36,10 @@ class Coder:
         """
         self.repo_owner = owner_name
         self.repo_name = repo_name
-        self.repo = sc.use_repo(self.work_dir, repo_name, self.owner)
-        self.repo_path = self.work_dir.joinpath(repo_name)
+        self.repo = sc.use_repo(self.work_dir, self.repo_name, self.repo_owner)
+        self.repo_path = self.work_dir.joinpath(self.repo_name)
+        tester.create_bdd_dirs(self.repo_path)
+
         venv_path = self.repo_path.joinpath(".venv")
         # TODO: Use appropriate python version in following subprocesses
         if not venv_path.exists():
@@ -86,25 +88,36 @@ class Coder:
             else:
                 logger.error(cp_setup.stderr)
 
-    def open_issue(self, issue_num: int) -> Optional[str]:
-        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+    def open_issue(self, issue_num: Optional[int]) -> Optional[Issue]:
+        """
+        Open an issue to work on. Either a specific issue or next available
+        Parameters
+        ----------
+        issue_num
+
+        Returns
+        -------
+        The issue we're working on if available
+        """
+        if issue_num:
+            issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        else:
+            issue = todo.get_next_issue(self.repo_owner, self.repo_name)
         if not issue:
             return None
+
+        # Checkout git branch
         branch_name = todo.issue_title_to_branch_name(
             self.repo_owner, self.repo_name, issue
         )
         sc.use_branch(self.repo, branch_name)
-        return issue.body
 
-    def open_next_issue(self) -> Optional[str]:
-        next_issue = todo.get_next_issue(self.repo_owner, self.repo_name)
-        if not next_issue:
-            return None
-        branch_name = todo.issue_title_to_branch_name(
-            self.repo_owner, self.repo_name, next_issue
-        )
-        sc.use_branch(self.repo, branch_name)
-        return next_issue.body
+        # Create functional test
+        if branch_name.startswith(todo.feature_prepend):
+            feature_path = tester.create_feature(self.repo_path, issue)
+            tester.create_step_defs(feature_path)
+
+        return issue
 
     def complete_active_issue(self, commit_msg: str):
         """
@@ -123,10 +136,18 @@ class Coder:
             logger.info(cp_format.stdout)
         else:
             logger.error(cp_format.stderr)
+            return
         branch_name = sc.get_active_branch_name(self.repo)
         # TODO: Make commit msg based on branch_name and work done
-        sc.add_and_commit(self.repo, ["."], commit_msg)
-        sc.safe_merge(self.repo, branch_name)
+        issue_num = todo.issue_num_from_branch_name(branch_name)
+        if issue_num:
+            commit_msg = "Fixes #" + str(issue_num) + ". " + commit_msg
+        git_response_code = sc.add_and_commit(self.repo, ["."], commit_msg)
+        if git_response_code != 0:
+            return
+        git_response_code = sc.safe_merge(self.repo, branch_name)
+        if git_response_code != 0:
+            return
         sc.push_to_origin(self.repo)
 
 
@@ -144,10 +165,7 @@ def code():
 @click.option("-i", "--issue_num", type=int)
 def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
     coder = Coder(repo_owner, repo_name)
-    if issue_num:
-        coder.open_issue(issue_num)
-    else:
-        coder.open_next_issue()
+    coder.open_issue(issue_num)
 
 
 @code.command()
