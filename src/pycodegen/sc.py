@@ -128,19 +128,19 @@ def safe_merge(repo: Repo, branch_name: str) -> int:
     try:
         repo.git.rebase("origin/main")
     except git.exc.GitCommandError as gce:
-        logger.warning("Git commit command error: " + gce)
+        logger.warning("Git commit command error: " + str(gce))
         return 1
     use_branch(repo, "main")
     repo.remotes.origin.pull()
     try:
         repo.git.merge(branch_name)
     except git.exc.GitCommandError as gce:
-        logger.warning("Git commit command error: " + gce)
+        logger.warning("Git commit command error: " + str(gce))
         return 1
     return 0
 
 
-def push_to_origin(repo: Repo) -> None:
+def push_to_origin(repo: Repo) -> int:
     """
     Pushes main to origin
 
@@ -154,9 +154,13 @@ def push_to_origin(repo: Repo) -> None:
     """
     if repo.active_branch.name != "main":
         use_branch(repo, "main")
-    repo.remotes.origin.push("main")
-    # TODO: Get a response that can be tested. Tried PushInfo, but PyCharm
-    # couldn't handle it.
+    try:
+        repo.remotes.origin.push("main")
+    except git.exc.GitCommandError as gce:
+        logger.warning("Git commit command error: " + str(gce))
+        return 1
+    else:
+        return 0
 
 
 def get_last_commit_msg(repo: Repo) -> str:
@@ -172,3 +176,21 @@ def get_last_commit_msg(repo: Repo) -> str:
     """
     head_commit = repo.head.commit
     return head_commit.message
+
+
+def delete_branch(repo: Repo, branch_name: str) -> None:
+    """
+    Deletes the indicated branch
+    Parameters
+    ----------
+    repo
+    branch_name
+
+    Returns
+    -------
+    None
+    """
+    try:
+        repo.git.branch("-D", branch_name)
+    except git.exc.GitCommandError as gce:
+        logger.error("Git commit command error: " + str(gce))

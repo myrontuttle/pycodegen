@@ -181,7 +181,8 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
     )
     if cp_step_def.returncode == 0:
         with open(test_path, "w") as tp:
-            tp.write(cp_step_def.stdout.decode("UTF-8", errors="ignore"))
+            test_body = cp_step_def.stdout.decode("UTF-8", errors="ignore")
+            tp.write(test_body.replace("\r", ""))
         return test_path
     else:
         logger.error(cp_step_def.stderr)

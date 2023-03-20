@@ -154,7 +154,10 @@ class Coder:
         git_response_code = sc.safe_merge(self.repo, branch_name)
         if git_response_code != 0:
             return
-        sc.push_to_origin(self.repo)
+        git_response_code = sc.push_to_origin(self.repo)
+        if git_response_code != 0:
+            return
+        sc.delete_branch(self.repo, branch_name)
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
