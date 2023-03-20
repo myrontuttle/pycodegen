@@ -35,9 +35,9 @@ format:
 unit-test:
 	PYTHONPATH=$(PYTHONPATH)/src pdm run pytest -c pyproject.toml --cov-report=html --cov=src tests/unit/
 
-.PHONY: integration-test
-integration-test:
-	PYTHONPATH=$(PYTHONPATH)/src pdm run pytest -c pyproject.toml --cov-report=html --cov=src tests/integration
+.PHONY: functional-test
+functional-test:
+	PYTHONPATH=$(PYTHONPATH)/src pdm run pytest -c pyproject.toml --cov-report=html --cov=src tests/functional
 
 .PHONY: all-test
 all-test:

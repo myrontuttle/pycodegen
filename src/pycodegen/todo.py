@@ -15,6 +15,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+feature_prepend = "feat"
+bug_prepend = "bug"
+chore_prepend = "chore"
+
 
 def get_gh_token_from_env() -> Optional[str]:
     """Returns Github Token if available as environment variable."""
@@ -109,11 +113,38 @@ def issue_title_to_branch_name(
     """
     repo = get_repo(repo_owner, repo_name)
     if repo.get_label("enhancement") in issue.labels:
-        branch_name = "feat"
+        branch_name = feature_prepend
     elif repo.get_label("bug") in issue.labels:
-        branch_name = "bug"
+        branch_name = bug_prepend
     else:
-        branch_name = "chore"
+        branch_name = chore_prepend
     branch_name += f"/{issue.number}/"
     branch_name += issue.title.replace(" ", "-")
     return branch_name
+
+
+def issue_num_from_branch_name(branch_name: str) -> Optional[int]:
+    """
+    Parses the issue number from the branch name
+    Parameters
+    ----------
+    branch_name
+
+    Returns
+    -------
+    Issue number
+    """
+    issue_split = branch_name.split("/")
+    if issue_split[1]:
+        try:
+            issue_num = int(issue_split[1])
+        except ValueError as ve:
+            logger.error(
+                "Can't parse issue number from branch name: " + str(ve)
+            )
+            return None
+        else:
+            return issue_num
+    else:
+        logger.error("No issue number found in branch name.")
+        return None

@@ -72,7 +72,7 @@ def get_active_branch_name(repo: Repo) -> str:
     return repo.active_branch.name
 
 
-def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
+def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> int:
     """
     Adds specified files and commits them to the current branch of the repo
 
@@ -84,7 +84,7 @@ def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
 
     Returns
     -------
-    None
+    Status Code
     """
     if files[0] == ".":
         repo.git.add(all=True)
@@ -93,14 +93,23 @@ def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> None:
     try:
         repo.git.commit(m=commit_msg)
         # repo.index.commit(commit_msg)
-    except git.exc.HookExecutionError:
-        logger.warning("Error executing hook. Trying without pre-commit")
-        repo.git.commit(m=commit_msg, no_verify=True)
-    except git.exc.GitCommandError:
-        logger.warning("Git commit command error.")
+    except git.exc.HookExecutionError as hee:
+        logger.warning(
+            f"Error executing hook.\n{str(hee)}\nTrying without "
+            f"pre-commit."
+        )
+        try:
+            repo.git.commit(m=commit_msg, no_verify=True)
+        except git.exc.GitCommandError as gce:
+            logger.warning("Git commit command error: " + str(gce))
+            return 1
+    except git.exc.GitCommandError as gce:
+        logger.warning("Git commit command error: " + str(gce))
+        return 1
+    return 0
 
 
-def safe_merge(repo: Repo, branch_name: str) -> None:
+def safe_merge(repo: Repo, branch_name: str) -> int:
     """
     Safely merge branch_name into main
 
@@ -116,12 +125,19 @@ def safe_merge(repo: Repo, branch_name: str) -> None:
     if repo.active_branch.name != branch_name:
         use_branch(repo, branch_name)
     repo.git.fetch()
-    repo.git.rebase("origin/main")
-    # TODO: Add error handling if conflicts with origin/main
+    try:
+        repo.git.rebase("origin/main")
+    except git.exc.GitCommandError as gce:
+        logger.warning("Git commit command error: " + gce)
+        return 1
     use_branch(repo, "main")
     repo.remotes.origin.pull()
-    repo.git.merge(branch_name)
-    # TODO: Add error handling if conflicts with branch
+    try:
+        repo.git.merge(branch_name)
+    except git.exc.GitCommandError as gce:
+        logger.warning("Git commit command error: " + gce)
+        return 1
+    return 0
 
 
 def push_to_origin(repo: Repo) -> None:
@@ -141,3 +157,18 @@ def push_to_origin(repo: Repo) -> None:
     repo.remotes.origin.push("main")
     # TODO: Get a response that can be tested. Tried PushInfo, but PyCharm
     # couldn't handle it.
+
+
+def get_last_commit_msg(repo: Repo) -> str:
+    """
+    Get the last commit message
+    Parameters
+    ----------
+    repo
+
+    Returns
+    -------
+    String of last commit message
+    """
+    head_commit = repo.head.commit
+    return head_commit.message
