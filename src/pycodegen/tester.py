@@ -7,6 +7,8 @@ from pathlib import Path
 
 from github.Issue import Issue
 
+from pycodegen import llm
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -183,6 +185,79 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
         with open(test_path, "w") as tp:
             test_body = cp_step_def.stdout.decode("UTF-8", errors="ignore")
             tp.write(test_body.replace("\r", ""))
+        fix_step_def_functions(test_path)
         return test_path
     else:
         logger.error(cp_step_def.stderr)
+
+
+def fix_step_def_functions(test_path: Path) -> None:
+    """
+    Write titles for step def functions
+    Parameters
+    ----------
+    test_path
+
+    Returns
+    -------
+    None
+    """
+    with open(test_path, "r") as tp:
+        test_lines = tp.readlines()
+    test_desc = test_lines[0].lstrip('"').rstrip('"')
+    prompt_base = (
+        "Write the python function name for a bdd "
+        "test file with the description of: '"
+        + test_desc
+        + "'\nFor example:\n"
+    )
+    given_example = """@given("a branch other than main")
+def open_a_branch():"""
+    when_example = """@when("work is completed for the issue that branch was
+    opened for")
+def complete_work():"""
+    then_example = """@then("the branch is deleted")
+def check_for_deleted_branch():"""
+    for idx, line in enumerate(test_lines):
+        if line.startswith('@scenario("features\\'):
+            test_lines[idx] = line.replace(
+                '@scenario("features\\', '@scenario("../features/'
+            )
+        if line.startswith("def _():"):
+            prompt = ""
+            if test_lines[idx - 1].startswith("@given"):
+                prompt = (
+                    prompt_base
+                    + given_example
+                    + "\n\n"
+                    + test_lines[idx - 1]
+                    + "\n"
+                    + "def"
+                )
+            if test_lines[idx - 1].startswith("@when"):
+                prompt = (
+                    prompt_base
+                    + when_example
+                    + "\n\n"
+                    + test_lines[idx - 1]
+                    + "\n"
+                    + "def"
+                )
+            if test_lines[idx - 1].startswith("@then"):
+                prompt = (
+                    prompt_base
+                    + then_example
+                    + "\n\n"
+                    + test_lines[idx - 1]
+                    + "\n"
+                    + "def"
+                )
+            if prompt:
+                response = llm.generate_code(
+                    prompt=prompt, max_tokens=70, stop=["\n"]
+                )
+                if response:
+                    test_lines[idx] = line.replace(" _():", response)
+
+    with open(test_path, "w") as tp:
+        tp.writelines(test_lines)

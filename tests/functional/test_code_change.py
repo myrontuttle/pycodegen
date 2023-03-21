@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pycodegen import sc, todo
+from pycodegen import sc, tester, todo
 from pycodegen.coder import Coder
 
 work_dir = Path("C:\\Users\\myron\\PycharmProjects")
@@ -66,3 +66,18 @@ def test_code_stop() -> None:
     coder.complete_active_issue(commit_msg)
     assert sc.get_active_branch_name(coder.repo) == "main"
     assert not coder.repo.is_dirty(untracked_files=True)
+
+
+def test_fix_step_def_functions() -> None:
+    """
+    Test fixing step def functions
+    """
+    test_path = (
+        work_dir.joinpath(test_repo)
+        .joinpath("tests")
+        .joinpath("functional")
+        .joinpath("test_Test_an_issue.py")
+    )
+    tester.fix_step_def_functions(test_path)
+    with open(test_path) as tp:
+        assert tp.read().find("_():") == -1
