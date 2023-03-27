@@ -219,6 +219,10 @@ def complete_work():"""
     then_example = """@then("the branch is deleted")
 def check_for_deleted_branch():"""
     for idx, line in enumerate(test_lines):
+        if line.startswith("@scenario('features\\"):
+            test_lines[idx] = line.replace(
+                "@scenario('features\\", "@scenario('../features/"
+            )
         if line.startswith('@scenario("features\\'):
             test_lines[idx] = line.replace(
                 '@scenario("features\\', '@scenario("../features/'

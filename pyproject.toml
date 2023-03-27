@@ -33,6 +33,7 @@ dependencies = [
     "backoff>=2.2.1",
     "ratelimit>=2.2.1",
     "reretry>=0.11.8",
+    "tomli>=2.0.1",
 ]
 
 [tool.pdm]

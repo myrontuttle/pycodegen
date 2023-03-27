@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import logging
 import os
@@ -9,9 +9,11 @@ from openai import APIError
 from ratelimit import RateLimitException, limits
 from reretry import retry
 
-MODEL = "code-davinci-002"  # For testing use: "text-curie-001"  #
-MAX_TOKENS = 8001
+CODE_MODEL = "code-davinci-002"
+CM_MAX_TOKENS = 8001
 MINUTE = 60
+CHAT_MODEL = "gpt-3.5-turbo"
+CH_MAX_TOKENS = 4096
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,14 +39,14 @@ def get_api_key_from_env() -> Optional[str]:
 def generate_code(
     prompt: str,
     temp: Optional[float] = 0.1,
-    max_tokens: Optional[int] = int(MAX_TOKENS / 2),
+    max_tokens: Optional[int] = int(CM_MAX_TOKENS / 2),
     stop: Optional[List[str]] = None,
 ) -> str:
     """Sends request to Codex Completion service and returns response."""
     openai.api_key = get_api_key_from_env()
     try:
         response = openai.Completion.create(
-            engine=MODEL,
+            engine=CODE_MODEL,
             prompt=prompt,
             temperature=temp,
             max_tokens=max_tokens,
@@ -56,4 +58,24 @@ def generate_code(
         logger.debug(
             f" from: {prompt} with temp: {temp}, " f" max_tokens: {max_tokens}"
         )
+        return ""
+
+
+@retry(APIError, tries=8, delay=1, backoff=2)
+@on_exception(expo, RateLimitException, max_tries=8)
+@limits(calls=20, period=MINUTE)
+def chat(
+    messages: List[Dict[str, str]],
+) -> str:
+    """Sends request to ChatGPT service and returns response."""
+    openai.api_key = get_api_key_from_env()
+    try:
+        response = openai.ChatCompletion.create(
+            model=CHAT_MODEL,
+            messages=messages,
+        )
+        return str(response["choices"][0]["message"]["content"])
+    except Exception as e:
+        logger.error(e)
+        logger.debug(f" from: {messages}")
         return ""

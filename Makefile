@@ -60,6 +60,11 @@ check-security:
 .PHONY: check-all
 check-all: check-style mypy check-security all-test
 
+#* Package
+.PHONY: prepare-deploy
+prepare-deploy:
+	pdm export -o requirements.txt --prod --without-hashes
+
 #* Cleaning
 .PHONY: pycache-remove
 pycache-remove:

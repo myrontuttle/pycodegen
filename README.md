@@ -145,7 +145,19 @@ make check-style && make mypy && make check-safety && make test
 </details>
 
 <details>
-<summary>7. Cleanup</summary>
+<summary>7. Deploy</summary>
+<p>
+Prepare to deploy
+
+```bash
+make prepare-deploy
+```
+
+</p>
+</details>
+
+<details>
+<summary>8. Cleanup</summary>
 <p>
 Delete pycache files
 

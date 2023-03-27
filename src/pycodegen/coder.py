@@ -1,14 +1,17 @@
-from typing import Optional
+from typing import Dict, Optional
 
+import json
 import logging
 import os
 import subprocess
+from json import JSONDecodeError
 from pathlib import Path
 
 import click
+import tomli
 from github.Issue import Issue
 
-from pycodegen import sc, tester, todo
+from pycodegen import llm, sc, tester, todo
 
 logging.basicConfig(
     level=logging.INFO,
@@ -158,6 +161,116 @@ class Coder:
         if git_response_code != 0:
             return
         sc.delete_branch(self.repo, branch_name)
+
+    def recommend_libraries(self, issue_num: int) -> Optional[Dict[str, str]]:
+        """
+        Recommends a library based on an issue
+        Parameters
+        ----------
+        issue_num
+
+        Returns
+        -------
+        Recommended library
+        """
+        # Get Issue
+        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        # TODO: Consider adding project description for context in prompt
+        # Ask Chat LLM what libraries it would recommend for issue
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful and efficient " "developer.",
+            },
+            {
+                "role": "user",
+                "content": "In the form of a python "
+                "dictionary, what are the top python "
+                "libraries I could use for the "
+                "following "
+                f"ticket?\n{issue.title}\n"
+                f"{issue.body}\nRespond in the "
+                "form of a python dictionary with "
+                "each library name as the "
+                "key and a string of two sentences "
+                "describing the library "
+                "and why to use it for this ticket "
+                "as the value.",
+            },
+        ]
+        response: str = llm.chat(messages)
+        if not response:
+            return None
+        response = response[response.find("{") : response.find("}") + 1]
+        recommendations = json.loads(response)
+
+        # Lookup alternatives
+        rec_list = " or ".join(recommendations.keys())
+        # TODO: Do this with a web search to get current best practices
+        alt_messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful and efficient " "developer.",
+            },
+            {
+                "role": "user",
+                "content": "In the form of a python dictionary, "
+                "what are some alternative python "
+                f"libraries to using {rec_list}? "
+                "Respond in the form of a python "
+                "dictionary with each library name as "
+                "the key and a string of two "
+                "sentences describing the library "
+                "and why to use it for this ticket "
+                "as the value.",
+            },
+        ]
+        alt_response: str = llm.chat(alt_messages)
+        if alt_response:
+            alt_response = alt_response[
+                alt_response.find("{") : alt_response.find("}") + 1
+            ]
+            try:
+                recommendations.update(json.loads(alt_response))
+            except JSONDecodeError as jde:
+                logger.error(str(jde))
+                logger.debug(
+                    "Unable to get library alternatives.\n"
+                    f"Messages: {str(alt_messages)}\n"
+                    f"Response: {alt_response}"
+                )
+
+        # If the project is already using the libraries, recommend those
+        to_recommend = {}
+        with open(self.repo_path.joinpath("pyproject.toml"), mode="rb") as fp:
+            project_config = tomli.load(fp)
+        dependencies = project_config["project"]["dependencies"]
+        for rec in recommendations.keys():
+            if rec in dependencies:
+                to_recommend[rec] = recommendations[rec]
+        if to_recommend:
+            return to_recommend
+        else:
+            return recommendations
+
+    def best_library(self, libs: Dict[str, str]) -> Dict[str, str]:
+        """
+        Evaluates a set of python libraries and returns the best
+        Returns
+        -------
+
+        """
+        # For each library
+        # Find the page for it on PyPI
+        # Ensure it supports the Python version of the project.
+        # Check the Development Status (want Production/Stable)
+        # Check for project link to the project’s source code
+        # Find the package on libraries.io
+        # Check on dependent packages
+        # Check the SourceRank
+        # Find the source code in GitHub
+        # Check on the social proof (Watchers, Stars, Forks, PR's, Issues)
+        # Check the package's license
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
