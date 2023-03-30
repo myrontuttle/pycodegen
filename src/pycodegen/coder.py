@@ -10,6 +10,7 @@ from pathlib import Path
 import click
 import tomli
 from github.Issue import Issue
+from pathvalidate import sanitize_filename
 
 from pycodegen import llm, sc, tester, todo
 
@@ -19,6 +20,112 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+TEMP_FILE = "temp.py"
+
+
+def best_library(libs: Dict[str, str]) -> str:
+    """
+    Evaluates a set of python libraries and returns the best
+    Returns
+    -------
+    The top library from the set
+    """
+    return list(libs)[0]
+    # For each library
+    # Find the page for it on PyPI
+    # Ensure it supports the Python version of the project.
+    # Check the Development Status (want Production/Stable)
+    # Check for project link to the project’s source code
+    # Find the package on libraries.io
+    # Check on dependent packages
+    # Check the SourceRank
+    # Find the source code in GitHub
+    # Check on the social proof (Watchers, Stars, Forks, PR's, Issues)
+    # Check the package's license
+
+
+def just_the_code(llm_text: str) -> str:
+    """
+    Returns just the code portion of an LLM response.
+    Parameters
+    ----------
+    llm_text
+
+    Returns
+    -------
+    Just the code portion of the text provided
+    """
+    if llm_text.startswith("```python"):
+        return llm_text[9 : llm_text.find("```")]
+    else:
+        # We'll probably need to add more conditions as we encounter them
+        return llm_text
+
+
+def add_text_to_module(module_text: str, text_to_add: str) -> str:
+    """
+    Adds function text to module text in an organized way
+    Parameters
+    ----------
+    module_text
+    text_to_add
+
+    Returns
+    -------
+    Updated module text
+    """
+    class_loc = module_text.find("class ")
+    main_loc = module_text.find('if __name__ == "__main__":')
+    if class_loc != -1:
+        end_of_class = module_text.find("\n\n\n", class_loc)
+        if end_of_class == -1:
+            # Nothing after last class function
+            module_text += "\n\n" + text_to_add + "\n"
+        else:
+            # Adding text to end of class
+            module_text = (
+                f"{module_text[:end_of_class + 2]}"
+                f"{text_to_add}"
+                f"{module_text[end_of_class + 2:]}"
+            )
+    elif main_loc != -1:
+        # No class, but main function needs to stay at end
+        module_text = (
+            f"{module_text[:main_loc]}"
+            f"{text_to_add}\n\n\n"
+            f"{module_text[main_loc:]}"
+        )
+    else:
+        # No class or main function, just add to end
+        module_text += "\n\n" + text_to_add + "\n"
+    return module_text
+
+
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
+def code():
+    pass
+
+
+@code.command()
+@click.argument("repo_owner")
+@click.argument("repo_name")
+@click.option("-i", "--issue_num", type=int)
+def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
+    coder = Coder(repo_owner, repo_name)
+    coder.open_issue(issue_num)
+
+
+@code.command()
+@click.argument("repo_owner")
+@click.argument("repo_name")
+@click.argument("commit_msg")
+def stop(repo_owner: str, repo_name: str, commit_msg: str) -> None:
+    coder = Coder(repo_owner, repo_name)
+    coder.complete_active_issue(commit_msg)
 
 
 class Coder:
@@ -31,7 +138,7 @@ class Coder:
 
     def __init__(self, owner_name: str, repo_name: str):
         """
-        Initializes a coder on a repo
+        Initializes a coder on a project repo
         Parameters
         ----------
         owner_name
@@ -126,6 +233,17 @@ class Coder:
             feature_path = tester.create_feature(self.repo_path, issue)
             tester.create_step_defs(feature_path)
 
+        # Add recommended library
+        libs = self.recommend_libraries(issue_num)
+        best_lib = ""
+        if libs:
+            best_lib = best_library(libs)
+            self.add_library(best_lib)
+
+        # Start writing code for the issue
+        file_name = self.recommend_filename(issue_num)
+        self.write_code(issue_num, file_name, best_lib)
+
         return issue
 
     def complete_active_issue(self, commit_msg: str):
@@ -178,10 +296,7 @@ class Coder:
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
         messages = [
-            {
-                "role": "system",
-                "content": "You are a helpful and efficient " "developer.",
-            },
+            llm.CODER_ROLE,
             {
                 "role": "user",
                 "content": "In the form of a python "
@@ -208,10 +323,7 @@ class Coder:
         rec_list = " or ".join(recommendations.keys())
         # TODO: Do this with a web search to get current best practices
         alt_messages = [
-            {
-                "role": "system",
-                "content": "You are a helpful and efficient " "developer.",
-            },
+            llm.CODER_ROLE,
             {
                 "role": "user",
                 "content": "In the form of a python dictionary, "
@@ -253,50 +365,134 @@ class Coder:
         else:
             return recommendations
 
-    def best_library(self, libs: Dict[str, str]) -> Dict[str, str]:
+    def add_library(self, lib_name: str) -> None:
         """
-        Evaluates a set of python libraries and returns the best
+        Adds a library to the project dependencies using PDM if it's not
+        already a dependency
+        """
+        os.chdir(self.repo_path)
+        with open(self.repo_path.joinpath("pyproject.toml"), mode="rb") as fp:
+            project_config = tomli.load(fp)
+        dependencies = project_config["project"]["dependencies"]
+        if lib_name in dependencies:
+            logger.info(f"Library: {lib_name} already in project dependencies")
+            return None
+        cp_add_lib = subprocess.run(
+            [
+                "pdm",
+                "add",
+                f"{lib_name}",
+            ],
+            capture_output=True,
+        )
+        if cp_add_lib.returncode == 0:
+            logger.info(cp_add_lib.stdout)
+        else:
+            logger.error(cp_add_lib.stderr)
+
+    def recommend_filename(self, issue_num: int) -> str:
+        """
+        Recommend a filename to create or add to for the issue
+        Parameters
+        ----------
+        issue_num
+
         Returns
         -------
-
+        Filename
         """
-        # For each library
-        # Find the page for it on PyPI
-        # Ensure it supports the Python version of the project.
-        # Check the Development Status (want Production/Stable)
-        # Check for project link to the project’s source code
-        # Find the package on libraries.io
-        # Check on dependent packages
-        # Check the SourceRank
-        # Find the source code in GitHub
-        # Check on the social proof (Watchers, Stars, Forks, PR's, Issues)
-        # Check the package's license
+        # Get Issue
+        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        # TODO: Consider adding project description for context in prompt
+        # Ask Chat LLM what filename it would recommend for issue
+        messages = [
+            llm.CODER_ROLE,
+            {
+                "role": "user",
+                "content": "What should I name the python script that "
+                f"solves the following issue?\n{issue.title}"
+                f"\n{issue.body}\nRespond with just the name of "
+                f"the file.",
+            },
+        ]
+        response: str = llm.chat(messages)
+        if response:
+            response = sanitize_filename(response)
+            if response.find(".py") == -1:
+                response += ".py"
+            return response
+        else:
+            logger.error(
+                f"No file name recommended for issue #: {issue_num}."
+                f"Using {TEMP_FILE}."
+            )
+            return TEMP_FILE
 
+    def write_code(
+        self, issue_num: int, file_name: str, lib_name: Optional[str]
+    ) -> None:
+        """
+        Writes code to the file provided (creating if it doesn't exist)
+        Parameters
+        ----------
+        issue_num
+        file_name
+        lib_name
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+        Returns
+        -------
+        None
+        """
+        # Get Issue
+        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
 
+        # Get File
+        file_path = (
+            self.repo_path.joinpath("src")
+            .joinpath(self.repo_name)
+            .joinpath(file_name)
+        )
+        file_contents = ""
+        if file_path.exists():
+            with open(file_path, "r") as fp:
+                file_contents = fp.read()
+        file_header = ""
+        if file_contents:
+            file_header = file_contents[: file_contents.find("def")]
+        use_lib = ""
+        if lib_name:
+            use_lib = f"Use {lib_name} in the solution."
 
-@click.group(context_settings=CONTEXT_SETTINGS)
-def code():
-    pass
-
-
-@code.command()
-@click.argument("repo_owner")
-@click.argument("repo_name")
-@click.option("-i", "--issue_num", type=int)
-def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
-    coder = Coder(repo_owner, repo_name)
-    coder.open_issue(issue_num)
-
-
-@code.command()
-@click.argument("repo_owner")
-@click.argument("repo_name")
-@click.argument("commit_msg")
-def stop(repo_owner: str, repo_name: str, commit_msg: str) -> None:
-    coder = Coder(repo_owner, repo_name)
-    coder.complete_active_issue(commit_msg)
+        # TODO: Consider adding project description for context in prompt
+        # Ask Chat LLM to provide code for issue
+        messages = [
+            llm.CODER_ROLE,
+            {
+                "role": "user",
+                "content": "Provide python code for a solution "
+                f"to the following issue.\n"
+                f"{use_lib}\n"
+                f"{issue.title}\n"
+                f"{issue.body}\nRespond with just the python code."
+                f"{file_header}",
+            },
+        ]
+        response: str = llm.chat(messages)
+        if response:
+            if file_contents:
+                file_contents = add_text_to_module(
+                    file_contents,
+                    just_the_code(response),
+                )
+            else:
+                file_contents = just_the_code(response)
+            with open(file_path, "w") as fp:
+                fp.write(file_contents.replace("\r", ""))
+            logger.info(f"Added the following to file {file_path}")
+            logger.info(f"{file_contents}")
+        else:
+            logger.warning(f"No response from LLM for messages: {messages}")
+            logger.warning("No source code written.")
 
 
 if __name__ == "__main__":

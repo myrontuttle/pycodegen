@@ -4,13 +4,16 @@ import logging
 import os
 
 import openai
+import tiktoken
 from backoff import expo, on_exception
 from openai import APIError
 from ratelimit import RateLimitException, limits
 from reretry import retry
 
-CODE_MODEL = "code-davinci-002"
-CM_MAX_TOKENS = 8001
+CODER_ROLE = {
+    "role": "system",
+    "content": "You are a helpful and efficient developer.",
+}
 MINUTE = 60
 CHAT_MODEL = "gpt-3.5-turbo"
 CH_MAX_TOKENS = 4096
@@ -33,32 +36,19 @@ def get_api_key_from_env() -> Optional[str]:
     return os.getenv("OPENAI_API_KEY")
 
 
-@retry(APIError, tries=8, delay=1, backoff=2)
-@on_exception(expo, RateLimitException, max_tries=8)
-@limits(calls=20, period=MINUTE)
 def generate_code(
     prompt: str,
-    temp: Optional[float] = 0.1,
-    max_tokens: Optional[int] = int(CM_MAX_TOKENS / 2),
-    stop: Optional[List[str]] = None,
 ) -> str:
-    """Sends request to Codex Completion service and returns response."""
+    """Sends request to Chat function and returns response."""
     openai.api_key = get_api_key_from_env()
-    try:
-        response = openai.Completion.create(
-            engine=CODE_MODEL,
-            prompt=prompt,
-            temperature=temp,
-            max_tokens=max_tokens,
-            stop=stop,
-        )
-        return str(response["choices"][0]["text"])
-    except Exception as e:
-        logger.error(e)
-        logger.debug(
-            f" from: {prompt} with temp: {temp}, " f" max_tokens: {max_tokens}"
-        )
-        return ""
+    messages = [
+        CODER_ROLE,
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
+    return chat(messages)
 
 
 @retry(APIError, tries=8, delay=1, backoff=2)
@@ -79,3 +69,30 @@ def chat(
         logger.error(e)
         logger.debug(f" from: {messages}")
         return ""
+
+
+def num_tokens_from_messages(messages, model=CHAT_MODEL) -> int:
+    """Returns the number of tokens used by a list of messages."""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+    if model == CHAT_MODEL:  # note: future models may deviate from this
+        num_tokens = 0
+        for message in messages:
+            num_tokens += 4  # every message follows <im_start>{
+            # role/name}\n{content}<im_end>\n
+            for key, value in message.items():
+                num_tokens += len(encoding.encode(value))
+                if key == "name":  # if there's a name, the role is omitted
+                    num_tokens += -1  # role is always required and always 1
+                    # token
+        num_tokens += 2  # every reply is primed with <im_start>assistant
+        return num_tokens
+    else:
+        raise NotImplementedError(
+            f"""num_tokens_from_messages() is not presently implemented for
+            model {model}.
+  See https://github.com/openai/openai-python/blob/main/chatml.md for
+  information on how messages are converted to tokens."""
+        )

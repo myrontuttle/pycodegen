@@ -206,7 +206,7 @@ def fix_step_def_functions(test_path: Path) -> None:
         test_lines = tp.readlines()
     test_desc = test_lines[0].lstrip('"').rstrip('"')
     prompt_base = (
-        "Write the python function name for a bdd "
+        "Write just the python function name for a bdd "
         "test file with the description of: '"
         + test_desc
         + "'\nFor example:\n"
@@ -257,11 +257,9 @@ def check_for_deleted_branch():"""
                     + "def"
                 )
             if prompt:
-                response = llm.generate_code(
-                    prompt=prompt, max_tokens=70, stop=["\n"]
-                )
+                response = llm.generate_code(prompt=prompt)
                 if response:
-                    test_lines[idx] = line.replace(" _():", response)
+                    test_lines[idx] = line.replace("_():", response)
 
     with open(test_path, "w") as tp:
         tp.writelines(test_lines)
