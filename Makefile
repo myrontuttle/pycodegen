@@ -15,6 +15,7 @@ install:
 .PHONY: update
 update:
 	pdm update
+	pdm export -o requirements.txt --prod --without-hashes
 
 .PHONY: update-dev-deps
 update-dev-deps:
