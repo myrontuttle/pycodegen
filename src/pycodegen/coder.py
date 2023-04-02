@@ -317,6 +317,7 @@ class Coder:
         if not response:
             return None
         response = response[response.find("{") : response.find("}") + 1]
+        response = response.replace("'", '"')
         recommendations = json.loads(response)
 
         # Lookup alternatives
