@@ -450,7 +450,7 @@ class Coder:
         # Get File
         file_path = (
             self.repo_path.joinpath("src")
-            .joinpath(self.repo_name)
+            .joinpath(self.repo_name.replace("-", "_"))
             .joinpath(file_name)
         )
         file_contents = ""
