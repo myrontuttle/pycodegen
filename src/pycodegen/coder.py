@@ -58,6 +58,8 @@ def just_the_code(llm_text: str) -> str:
     """
     if llm_text.startswith("```python"):
         return llm_text[9 : llm_text.find("```")]
+    elif llm_text.startswith("```"):
+        return llm_text[3 : llm_text.find("```")]
     else:
         # We'll probably need to add more conditions as we encounter them
         return llm_text
