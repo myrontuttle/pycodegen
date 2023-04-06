@@ -45,7 +45,7 @@ def best_library(libs: Dict[str, str]) -> str:
     # Check the package's license
 
 
-def just_the_code(llm_text: str) -> str:
+def just_the_code(llm_text: str) -> Optional[str]:
     """
     Returns just the code portion of an LLM response.
     Parameters
@@ -56,10 +56,18 @@ def just_the_code(llm_text: str) -> str:
     -------
     Just the code portion of the text provided
     """
-    if llm_text.startswith("```python"):
-        return llm_text[9 : llm_text.find("```")]
-    elif llm_text.startswith("```"):
-        return llm_text[3 : llm_text.find("```")]
+    if "```python" in llm_text:
+        start_idx = llm_text.find("```python") + 10
+        end_idx = llm_text.find("```", start_idx)
+        return llm_text[start_idx:end_idx]
+    elif "```" in llm_text:
+        start_idx = llm_text.find("```") + 4
+        end_idx = llm_text.find("```", start_idx)
+        return llm_text[start_idx:end_idx]
+
+    if "def " not in llm_text:
+        # Probably not python code
+        return None
     else:
         # We'll probably need to add more conditions as we encounter them
         return llm_text
@@ -235,16 +243,16 @@ class Coder:
             feature_path = tester.create_feature(self.repo_path, issue)
             tester.create_step_defs(feature_path)
 
-        # Add recommended library
-        libs = self.recommend_libraries(issue_num)
-        best_lib = ""
-        if libs:
-            best_lib = best_library(libs)
-            self.add_library(best_lib)
+            # Add recommended library
+            libs = self.recommend_libraries(issue_num)
+            best_lib = ""
+            if libs:
+                best_lib = best_library(libs)
+                self.add_library(best_lib)
 
-        # Start writing code for the issue
-        file_name = self.recommend_filename(issue_num)
-        self.write_code(issue_num, file_name, best_lib)
+            # Start writing code for the issue
+            file_name = self.recommend_filename(issue_num)
+            self.write_code(issue_num, file_name, best_lib)
 
         return issue
 
@@ -320,7 +328,12 @@ class Coder:
             return None
         response = response[response.find("{") : response.find("}") + 1]
         response = response.replace("'", '"')
-        recommendations = json.loads(response)
+        try:
+            recommendations = json.loads(response)
+        except JSONDecodeError as jde:
+            logger.warning("Can't load LLM response as JSON. " + str(jde))
+            logger.warning("Response: " + response)
+            return None
 
         # Lookup alternatives
         rec_list = " or ".join(recommendations.keys())
@@ -431,9 +444,7 @@ class Coder:
             )
             return TEMP_FILE
 
-    def write_code(
-        self, issue_num: int, file_name: str, lib_name: Optional[str]
-    ) -> None:
+    def write_code(self, issue_num: int, file_name: str, lib_name="") -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
         Parameters
