@@ -24,27 +24,6 @@ logger = logging.getLogger(__name__)
 TEMP_FILE = "temp.py"
 
 
-def best_library(libs: Dict[str, str]) -> str:
-    """
-    Evaluates a set of python libraries and returns the best
-    Returns
-    -------
-    The top library from the set
-    """
-    return list(libs)[0]
-    # For each library
-    # Find the page for it on PyPI
-    # Ensure it supports the Python version of the project.
-    # Check the Development Status (want Production/Stable)
-    # Check for project link to the project’s source code
-    # Find the package on libraries.io
-    # Check on dependent packages
-    # Check the SourceRank
-    # Find the source code in GitHub
-    # Check on the social proof (Watchers, Stars, Forks, PR's, Issues)
-    # Check the package's license
-
-
 def just_the_code(llm_text: str) -> Optional[str]:
     """
     Returns just the code portion of an LLM response.
@@ -247,8 +226,7 @@ class Coder:
             libs = self.recommend_libraries(issue_num)
             best_lib = ""
             if libs:
-                best_lib = best_library(libs)
-                self.add_library(best_lib)
+                best_lib = list(libs)[0]
 
             # Start writing code for the issue
             file_name = self.recommend_filename(issue_num)
@@ -326,6 +304,9 @@ class Coder:
         response: str = llm.chat(messages)
         if not response:
             return None
+
+        click.echo(f"Recommended Libraries for issue #{str(issue_num)}:")
+        click.echo(response)
         response = response[response.find("{") : response.find("}") + 1]
         response = response.replace("'", '"')
         try:
@@ -503,7 +484,7 @@ class Coder:
             if file_contents:
                 with open(file_path, "w") as fp:
                     fp.write(file_contents.replace("\r", ""))
-                logger.info(f"Added the following to file {file_path}")
+                logger.info(f"Added the following to file {file_path}:")
                 logger.info(f"{file_contents}")
             else:
                 logger.warning("No code from LLM. Response: " + response)

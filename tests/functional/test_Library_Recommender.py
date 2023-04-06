@@ -5,8 +5,8 @@ from pytest_bdd import given, scenario, then, when
 from pycodegen.coder import Coder
 
 repo_owner = "myrontuttle"
-test_repo = "relationship-manager"
-test_issue = 2  # Create a Webpage
+test_repo = "test_project"
+test_issue = 5  # Create a Webpage
 
 
 @scenario("../features/Library_Recommender.feature", "Recommend Library")
