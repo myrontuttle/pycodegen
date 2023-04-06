@@ -500,10 +500,13 @@ class Coder:
                 )
             else:
                 file_contents = just_the_code(response)
-            with open(file_path, "w") as fp:
-                fp.write(file_contents.replace("\r", ""))
-            logger.info(f"Added the following to file {file_path}")
-            logger.info(f"{file_contents}")
+            if file_contents:
+                with open(file_path, "w") as fp:
+                    fp.write(file_contents.replace("\r", ""))
+                logger.info(f"Added the following to file {file_path}")
+                logger.info(f"{file_contents}")
+            else:
+                logger.warning("No code from LLM. Response: " + response)
         else:
             logger.warning(f"No response from LLM for messages: {messages}")
             logger.warning("No source code written.")
