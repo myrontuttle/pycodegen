@@ -3,6 +3,7 @@ from typing import Dict, Optional
 import json
 import logging
 import os
+import re
 import subprocess
 from json import JSONDecodeError
 from pathlib import Path
@@ -89,6 +90,46 @@ def add_text_to_module(module_text: str, text_to_add: str) -> str:
         # No class or main function, just add to end
         module_text += "\n\n" + text_to_add + "\n"
     return module_text
+
+
+def add_logging(script_content: str) -> str:
+    """Adds code for a logger to a python script"""
+    if script_content.find("import logging") != -1:
+        logger.info("Logging already included")
+        return script_content
+    import_re = re.compile(r"^\s*import\s.*$", re.MULTILINE)
+    from_import_re = re.compile(r"^\s*from\s.*$", re.MULTILINE)
+    last_import_match = None
+    for match in reversed(list(import_re.finditer(script_content))):
+        if (
+            last_import_match is None
+            or match.start() > last_import_match.start()
+        ):
+            last_import_match = match
+    for match in reversed(list(from_import_re.finditer(script_content))):
+        if (
+            last_import_match is None
+            or match.start() > last_import_match.start()
+        ):
+            last_import_match = match
+    if last_import_match is not None:
+        last_import_line = last_import_match.end()
+        return (
+            script_content[:last_import_line] + "\nimport logging\n\n"
+            "logging.basicConfig(level=logging.INFO, "
+            "format='%(asctime)s [%(levelname)s] %(message)s', "
+            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+            "logger = logging.getLogger(__name__)\n\n"
+            + script_content[last_import_line:]
+        )
+    else:
+        return (
+            "import logging\n\n"
+            "logging.basicConfig(level=logging.INFO, "
+            "format='%(asctime)s [%(levelname)s] %(message)s', "
+            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+            "logger = logging.getLogger(__name__)\n\n" + script_content
+        )
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -481,13 +522,11 @@ class Coder:
                 )
             else:
                 file_contents = just_the_code(response)
-            if file_contents:
-                with open(file_path, "w") as fp:
-                    fp.write(file_contents.replace("\r", ""))
-                logger.info(f"Added the following to file {file_path}:")
-                logger.info(f"{file_contents}")
-            else:
-                logger.warning("No code from LLM. Response: " + response)
+                file_contents = add_logging(file_contents)
+            with open(file_path, "w") as fp:
+                fp.write(file_contents.replace("\r", ""))
+            logger.info(f"Added the following to file {file_path}")
+            logger.info(f"{file_contents}")
         else:
             logger.warning(f"No response from LLM for messages: {messages}")
             logger.warning("No source code written.")
