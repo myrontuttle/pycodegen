@@ -35,9 +35,13 @@ def issue_and_file():
     files_created.append(file_name)
 
 
-@then("the program generates code based on that issue.")
+@then(
+    "the program generates code based on that issue and that code contains "
+    "a logger."
+)
 def check_code_generated():
-    """the program generates code based on that issue."""
+    """the program generates code based on that issue and that code contains
+    a logger."""
     coder = Coder(repo_owner, test_repo)
     test_file_path = (
         coder.repo_path.joinpath("src")
@@ -46,4 +50,6 @@ def check_code_generated():
     )
     assert test_file_path.exists()
     with open(test_file_path, "r") as tfp:
-        assert tfp.read()
+        contents = tfp.read()
+        assert contents
+        assert contents.find("logger") != -1

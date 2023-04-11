@@ -3,6 +3,7 @@ from typing import Dict, Optional
 import json
 import logging
 import os
+import re
 import subprocess
 from json import JSONDecodeError
 from pathlib import Path
@@ -24,28 +25,7 @@ logger = logging.getLogger(__name__)
 TEMP_FILE = "temp.py"
 
 
-def best_library(libs: Dict[str, str]) -> str:
-    """
-    Evaluates a set of python libraries and returns the best
-    Returns
-    -------
-    The top library from the set
-    """
-    return list(libs)[0]
-    # For each library
-    # Find the page for it on PyPI
-    # Ensure it supports the Python version of the project.
-    # Check the Development Status (want Production/Stable)
-    # Check for project link to the project’s source code
-    # Find the package on libraries.io
-    # Check on dependent packages
-    # Check the SourceRank
-    # Find the source code in GitHub
-    # Check on the social proof (Watchers, Stars, Forks, PR's, Issues)
-    # Check the package's license
-
-
-def just_the_code(llm_text: str) -> str:
+def just_the_code(llm_text: str) -> Optional[str]:
     """
     Returns just the code portion of an LLM response.
     Parameters
@@ -56,10 +36,18 @@ def just_the_code(llm_text: str) -> str:
     -------
     Just the code portion of the text provided
     """
-    if llm_text.startswith("```python"):
-        return llm_text[9 : llm_text.find("```")]
-    elif llm_text.startswith("```"):
-        return llm_text[3 : llm_text.find("```")]
+    if "```python" in llm_text:
+        start_idx = llm_text.find("```python") + 10
+        end_idx = llm_text.find("```", start_idx)
+        return llm_text[start_idx:end_idx]
+    elif "```" in llm_text:
+        start_idx = llm_text.find("```") + 4
+        end_idx = llm_text.find("```", start_idx)
+        return llm_text[start_idx:end_idx]
+
+    if "def " not in llm_text:
+        # Probably not python code
+        return None
     else:
         # We'll probably need to add more conditions as we encounter them
         return llm_text
@@ -102,6 +90,46 @@ def add_text_to_module(module_text: str, text_to_add: str) -> str:
         # No class or main function, just add to end
         module_text += "\n\n" + text_to_add + "\n"
     return module_text
+
+
+def add_logging(script_content: str) -> str:
+    """Adds code for a logger to a python script"""
+    if script_content.find("import logging") != -1:
+        logger.info("Logging already included")
+        return script_content
+    import_re = re.compile(r"^\s*import\s.*$", re.MULTILINE)
+    from_import_re = re.compile(r"^\s*from\s.*$", re.MULTILINE)
+    last_import_match = None
+    for match in reversed(list(import_re.finditer(script_content))):
+        if (
+            last_import_match is None
+            or match.start() > last_import_match.start()
+        ):
+            last_import_match = match
+    for match in reversed(list(from_import_re.finditer(script_content))):
+        if (
+            last_import_match is None
+            or match.start() > last_import_match.start()
+        ):
+            last_import_match = match
+    if last_import_match is not None:
+        last_import_line = last_import_match.end()
+        return (
+            script_content[:last_import_line] + "\nimport logging\n\n"
+            "logging.basicConfig(level=logging.INFO, "
+            "format='%(asctime)s [%(levelname)s] %(message)s', "
+            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+            "logger = logging.getLogger(__name__)\n\n"
+            + script_content[last_import_line:]
+        )
+    else:
+        return (
+            "import logging\n\n"
+            "logging.basicConfig(level=logging.INFO, "
+            "format='%(asctime)s [%(levelname)s] %(message)s', "
+            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+            "logger = logging.getLogger(__name__)\n\n" + script_content
+        )
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -235,16 +263,15 @@ class Coder:
             feature_path = tester.create_feature(self.repo_path, issue)
             tester.create_step_defs(feature_path)
 
-        # Add recommended library
-        libs = self.recommend_libraries(issue_num)
-        best_lib = ""
-        if libs:
-            best_lib = best_library(libs)
-            self.add_library(best_lib)
+            # Add recommended library
+            libs = self.recommend_libraries(issue_num)
+            best_lib = ""
+            if libs:
+                best_lib = list(libs)[0]
 
-        # Start writing code for the issue
-        file_name = self.recommend_filename(issue_num)
-        self.write_code(issue_num, file_name, best_lib)
+            # Start writing code for the issue
+            file_name = self.recommend_filename(issue_num)
+            self.write_code(issue_num, file_name, best_lib)
 
         return issue
 
@@ -318,9 +345,17 @@ class Coder:
         response: str = llm.chat(messages)
         if not response:
             return None
+
+        click.echo(f"Recommended Libraries for issue #{str(issue_num)}:")
+        click.echo(response)
         response = response[response.find("{") : response.find("}") + 1]
         response = response.replace("'", '"')
-        recommendations = json.loads(response)
+        try:
+            recommendations = json.loads(response)
+        except JSONDecodeError as jde:
+            logger.warning("Can't load LLM response as JSON. " + str(jde))
+            logger.warning("Response: " + response)
+            return None
 
         # Lookup alternatives
         rec_list = " or ".join(recommendations.keys())
@@ -431,9 +466,7 @@ class Coder:
             )
             return TEMP_FILE
 
-    def write_code(
-        self, issue_num: int, file_name: str, lib_name: Optional[str]
-    ) -> None:
+    def write_code(self, issue_num: int, file_name: str, lib_name="") -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
         Parameters
@@ -489,6 +522,7 @@ class Coder:
                 )
             else:
                 file_contents = just_the_code(response)
+                file_contents = add_logging(file_contents)
             with open(file_path, "w") as fp:
                 fp.write(file_contents.replace("\r", ""))
             logger.info(f"Added the following to file {file_path}")
