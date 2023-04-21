@@ -87,11 +87,11 @@ def test_add_logging_no_imports():
     script_content = "print('Hello, world!')"
     mod_content = coder.add_logging(script_content)
     assert (
-        mod_content == "import logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+        mod_content == "\nimport logging\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
         "logger = logging.getLogger(__name__)\n\n"
         "print('Hello, world!')"
     )
@@ -102,10 +102,10 @@ def test_add_logging_one_import():
     mod_content = coder.add_logging(script_content)
     assert (
         mod_content == "import os\nimport logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
         "logger = logging.getLogger(__name__)\n\n\nprint("
         "'Hello, world!')"
     )
@@ -116,10 +116,10 @@ def test_add_logging_multiple_imports():
     mod_content = coder.add_logging(script_content)
     assert (
         mod_content == "import os\nimport sys\nimport logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
         "logger = logging.getLogger(__name__)\n\n\nprint("
         "'Hello, world!')"
     )
@@ -130,10 +130,10 @@ def test_add_logging_from_import():
     mod_content = coder.add_logging(script_content)
     assert (
         mod_content == "from os import path\nimport logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
         "logger = logging.getLogger(__name__)\n\n\nprint("
         "'Hello, world!')"
     )
@@ -146,11 +146,11 @@ def test_add_logging_no_match():
     )
     mod_content = coder.add_logging(script_content)
     assert (
-        mod_content == "import logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
+        mod_content == "\nimport logging\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
         "logger = logging.getLogger(__name__)\n\n"
         "print('Hello, world!')\n\n# This is "
         "a comment\n\nprint('Goodbye, world!')"
@@ -160,11 +160,11 @@ def test_add_logging_no_match():
 def test_logging_already_added():
     script_content = (
         "import logging\n\n"
-        "logging.basicConfig("
-        "level=logging.INFO, "
-        "format='%(asctime)s [%(levelname)s] %(message)s',"
-        " datefmt='%Y-%m-%d %H:%M:%S')\n\n"
-        "logger = logging.getLogger(__name__)\n\n"
+        "logging.basicConfig(\n"
+        "\tlevel=logging.INFO,\n"
+        "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+        "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
+        "logger = logging.getLogger(__name__)\n\n\n"
         "print('Hello, world!')"
     )
     mod_content = coder.add_logging(script_content)

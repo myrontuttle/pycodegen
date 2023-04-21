@@ -23,6 +23,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TEMP_FILE = "temp.py"
+LOGGER_CODE = (
+    "\nimport logging\n\n"
+    "logging.basicConfig(\n"
+    "\tlevel=logging.INFO,\n"
+    "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
+    "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
+    "logger = logging.getLogger(__name__)\n\n"
+)
 
 
 def just_the_code(llm_text: str) -> Optional[str]:
@@ -117,21 +125,12 @@ def add_logging(script_content: str) -> str:
     if last_import_match is not None:
         last_import_line = last_import_match.end()
         return (
-            script_content[:last_import_line] + "\nimport logging\n\n"
-            "logging.basicConfig(level=logging.INFO, "
-            "format='%(asctime)s [%(levelname)s] %(message)s', "
-            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
-            "logger = logging.getLogger(__name__)\n\n"
+            script_content[:last_import_line]
+            + LOGGER_CODE
             + script_content[last_import_line:]
         )
     else:
-        return (
-            "import logging\n\n"
-            "logging.basicConfig(level=logging.INFO, "
-            "format='%(asctime)s [%(levelname)s] %(message)s', "
-            "datefmt='%Y-%m-%d %H:%M:%S')\n\n"
-            "logger = logging.getLogger(__name__)\n\n" + script_content
-        )
+        return LOGGER_CODE + script_content
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
