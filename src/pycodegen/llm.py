@@ -36,25 +36,33 @@ def get_api_key_from_env() -> Optional[str]:
     return os.getenv("OPENAI_API_KEY")
 
 
-def generate_code(
+def prompt_to_messages(
     prompt: str,
-) -> str:
-    """Sends request to Chat function and returns response."""
-    openai.api_key = get_api_key_from_env()
-    messages = [
-        CODER_ROLE,
+    role=None,
+) -> List[Dict[str, str]]:
+    """Converts prompt to messages list."""
+    if role is None:
+        role = CODER_ROLE
+    return [
+        role,
         {
             "role": "user",
             "content": prompt,
         },
     ]
-    return chat(messages)
+
+
+def complete_prompt(prompt: str) -> str:
+    """Converts prompt to messages and sends to respond function and returns
+    response."""
+    messages = prompt_to_messages(prompt)
+    return respond(messages)
 
 
 @retry(APIError, tries=8, delay=1, backoff=2)
 @on_exception(expo, RateLimitException, max_tries=8)
 @limits(calls=20, period=MINUTE)
-def chat(
+def respond(
     messages: List[Dict[str, str]],
 ) -> str:
     """Sends request to ChatGPT service and returns response."""
@@ -71,7 +79,9 @@ def chat(
         return ""
 
 
-def num_tokens_from_messages(messages, model=CHAT_MODEL) -> int:
+def num_tokens_from_messages(
+    messages: List[Dict[str, str]], model=CHAT_MODEL
+) -> int:
     """Returns the number of tokens used by a list of messages."""
     try:
         encoding = tiktoken.encoding_for_model(model)

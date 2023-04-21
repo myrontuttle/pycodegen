@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 feature_prepend = "feat"
-bug_prepend = "bug"
+bug_prepend = "fix"
 chore_prepend = "chore"
 
 
@@ -123,16 +123,14 @@ def issue_title_to_branch_name(
     return branch_name
 
 
-def issue_num_from_branch_name(branch_name: str) -> Optional[int]:
+def issue_num_from_branch_name(branch_name: str) -> Optional[str]:
     """
     Parses the issue number from the branch name
-    Parameters
-    ----------
-    branch_name
+    Args:
+        branch_name
 
-    Returns
-    -------
-    Issue number
+    Returns:
+        Issue number
     """
     issue_split = branch_name.split("/")
     if issue_split[1]:
@@ -144,7 +142,17 @@ def issue_num_from_branch_name(branch_name: str) -> Optional[int]:
             )
             return None
         else:
-            return issue_num
+            return str(issue_num)
     else:
         logger.warning("No issue number found in branch name.")
         return None
+
+
+def issue_type_from_branch_name(branch_name: str) -> Optional[str]:
+    """Returns the issue type from the branch name"""
+    issue_split = branch_name.split("/")
+    if issue_split[0]:
+        return issue_split[0]
+    else:
+        logger.warning("No issue type found in branch name.")
+    return None
