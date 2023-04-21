@@ -4,7 +4,10 @@ from pycodegen import coder
 def test_just_the_code_non_code_response():
     response = "I'm sorry, but I cannot provide code for that action."
     jtc = coder.just_the_code(response)
-    assert not jtc
+    assert (
+        jtc == '"""I\'m sorry, but I cannot provide code for that '
+        'action."""'
+    )
 
 
 def test_just_the_code_with_expl():

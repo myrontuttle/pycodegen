@@ -7,6 +7,7 @@ from pycodegen.coder import Coder
 
 repo_owner = "myrontuttle"
 test_repo = "test_project"
+test_issue_num = 3
 
 
 @scenario(
@@ -20,7 +21,6 @@ def test_creating_a_functional_test_for_a_new_feature_request():
 @given('an open issue in the GitHub repo with the "enhancement" label')
 def get_enhancement_issue():
     """an open issue in the GitHub repo with the "enhancement" label."""
-    test_issue_num = 3
     return test_issue_num
 
 
@@ -28,7 +28,7 @@ def get_enhancement_issue():
 def start_coding():
     """coding starts for the new issue."""
     coder = Coder(repo_owner, test_repo)
-    coder.open_issue(get_enhancement_issue())
+    coder.open_issue(test_issue_num)
 
 
 @then(

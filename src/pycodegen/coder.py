@@ -36,13 +36,11 @@ LOGGER_CODE = (
 def just_the_code(llm_text: str) -> Optional[str]:
     """
     Returns just the code portion of an LLM response.
-    Parameters
-    ----------
-    llm_text
+    Args:
+        llm_text
 
-    Returns
-    -------
-    Just the code portion of the text provided
+    Returns:
+        Just the code portion of the text provided
     """
     if "```python" in llm_text:
         start_idx = llm_text.find("```python") + 10
@@ -53,11 +51,11 @@ def just_the_code(llm_text: str) -> Optional[str]:
         end_idx = llm_text.find("```", start_idx)
         return llm_text[start_idx:end_idx]
 
-    if "def " not in llm_text:
+    if "import " not in llm_text and "def " not in llm_text:
         # Probably not python code
         logger.warning("LLM response doesn't appear to be code: ")
         logger.warning(llm_text)
-        return None
+        return '"""' + llm_text + '"""'
     else:
         # We'll probably need to add more conditions as we encounter them
         return llm_text
@@ -237,13 +235,11 @@ class Coder:
     def open_issue(self, issue_num: Optional[int]) -> Optional[Issue]:
         """
         Open an issue to work on. Either a specific issue or next available
-        Parameters
-        ----------
-        issue_num
+        Args:
+            issue_num
 
-        Returns
-        -------
-        The issue we're working on if available
+        Returns:
+            The issue we're working on if available
         """
         if issue_num:
             issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
@@ -264,7 +260,7 @@ class Coder:
         )
         sc.use_branch(self.repo, branch_name)
 
-        # Create functional test
+        # Create functional test if new feature
         if branch_name.startswith(todo.feature_prepend):
             feature_path = tester.create_feature(self.repo_path, issue)
             tester.create_step_defs(feature_path)
@@ -369,6 +365,7 @@ class Coder:
         )
         alt_response: str = llm.complete_prompt(alt_prompt)
         if alt_response:
+            alt_response = alt_response.replace("'", '"')
             alt_response = alt_response[
                 alt_response.find("{") : alt_response.find("}") + 1
             ]
@@ -457,15 +454,13 @@ class Coder:
     def write_code(self, issue_num: int, file_name: str, lib_name="") -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
-        Parameters
-        ----------
-        issue_num
-        file_name
-        lib_name
+        Args:
+            issue_num
+            file_name
+            lib_name
 
-        Returns
-        -------
-        None
+        Returns:
+            None
         """
         # Get Issue
         issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
@@ -503,8 +498,7 @@ class Coder:
                 )
             else:
                 file_contents = just_the_code(response)
-                if file_contents:
-                    file_contents = add_logging(file_contents)
+                file_contents = add_logging(file_contents)
             with open(file_path, "w") as fp:
                 fp.write(file_contents.replace("\r", ""))
             logger.info(f"Added the following to file {file_path}")

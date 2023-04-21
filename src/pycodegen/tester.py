@@ -159,14 +159,12 @@ def indent_sub_lines(issue_body: str) -> str:
 
 def create_step_defs(feature_path: Path) -> Optional[Path]:
     """
-    Create
-    Parameters
-    ----------
-    feature_path
+    Create definition file from feature file
+    Args:
+        feature_path
 
-    Returns
-    -------
-    step_def file path
+    Returns:
+        step_def file path
     """
     feat_file_name = os.path.split(feature_path)[1]
     feature_name = feat_file_name[: feat_file_name.find(".")]
@@ -194,30 +192,19 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
 def fix_step_def_functions(test_path: Path) -> None:
     """
     Write titles for step def functions
-    Parameters
-    ----------
-    test_path
+    Args:
+        test_path
 
-    Returns
-    -------
-    None
+    Returns:
+        None
     """
     with open(test_path, "r") as tp:
         test_lines = tp.readlines()
-    test_desc = test_lines[0].lstrip('"').rstrip('"')
+    test_lines[0].lstrip('"').rstrip('"')
     prompt_base = (
-        "Write just the python function name for a bdd "
-        "test file with the description of: '"
-        + test_desc
-        + "'\nFor example:\n"
+        "Write just the python function title for the following "
+        "step def:\n "
     )
-    given_example = """@given("a branch other than main")
-def open_a_branch():"""
-    when_example = """@when("work is completed for the issue that branch was
-    opened for")
-def complete_work():"""
-    then_example = """@then("the branch is deleted")
-def check_for_deleted_branch():"""
     for idx, line in enumerate(test_lines):
         if line.startswith("@scenario('features\\"):
             test_lines[idx] = line.replace(
@@ -228,38 +215,18 @@ def check_for_deleted_branch():"""
                 '@scenario("features\\', '@scenario("../features/'
             )
         if line.startswith("def _():"):
-            prompt = ""
-            if test_lines[idx - 1].startswith("@given"):
-                prompt = (
-                    prompt_base
-                    + given_example
-                    + "\n\n"
-                    + test_lines[idx - 1]
-                    + "\n"
-                    + "def"
-                )
-            if test_lines[idx - 1].startswith("@when"):
-                prompt = (
-                    prompt_base
-                    + when_example
-                    + "\n\n"
-                    + test_lines[idx - 1]
-                    + "\n"
-                    + "def"
-                )
-            if test_lines[idx - 1].startswith("@then"):
-                prompt = (
-                    prompt_base
-                    + then_example
-                    + "\n\n"
-                    + test_lines[idx - 1]
-                    + "\n"
-                    + "def"
-                )
-            if prompt:
-                response = llm.complete_prompt(prompt=prompt)
-                if response:
-                    test_lines[idx] = line.replace("_():", response)
+            step_def = (
+                test_lines[idx - 1]
+                .replace("@given(", "")
+                .replace("@when(", "")
+                .replace("@then(", "")
+                .replace(")", "")
+            )
+            prompt = prompt_base + step_def
+            response = llm.complete_prompt(prompt=prompt)
+            if response:
+                response = response.replace("def ", "").replace("():", "")
+                test_lines[idx] = line.replace("_", response)
 
     with open(test_path, "w") as tp:
         tp.writelines(test_lines)

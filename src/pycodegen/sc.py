@@ -79,14 +79,12 @@ def generate_commit_msg(repo: Repo, branch_name: str) -> str:
     """
     Generates a commit message based on the changes in the index (staging)
     of the provided repo. Run after adding changes to index (e.g. git add .)
-    Parameters
-    ----------
-    repo
-    branch_name
+    Args:
+        repo
+        branch_name
 
-    Returns
-    -------
-    Commit message as a string
+    Returns:
+        Commit message as a string
     """
     # Set the --no-pager option for the git command so that we get everything
     repo.config_writer().set_value("core", "pager", "")
@@ -139,19 +137,21 @@ def add_commit_message_info(
 ) -> str:
     """
     Adds issue type and number to the commit message
-    Parameters
-    ----------
-    commit_msg
-    issue_type
-    issue_num
+    Args:
+        commit_msg
+        issue_type
+        issue_num
 
-    Returns
-    -------
-    Commit message with issue type and number
+    Returns:
+        Commit message with issue type and number
     """
     if issue_num:
         commit_msg = commit_msg + " Fixes #" + str(issue_num)
     if issue_type:
+        # Remove issue type from commit message if it's already there
+        if commit_msg.find(": ") != -1:
+            commit_msg = commit_msg[commit_msg.find(": ") + 2 :]
+        # Add issue type from branch name
         commit_msg = issue_type + ": " + commit_msg
     return commit_msg
 
