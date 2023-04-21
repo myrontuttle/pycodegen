@@ -257,7 +257,7 @@ def check_for_deleted_branch():"""
                     + "def"
                 )
             if prompt:
-                response = llm.generate_code(prompt=prompt)
+                response = llm.complete_prompt(prompt=prompt)
                 if response:
                     test_lines[idx] = line.replace("_():", response)
 

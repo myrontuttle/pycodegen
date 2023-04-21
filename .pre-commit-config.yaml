@@ -32,7 +32,7 @@ repos:
         description: Verify that pyproject.toml adheres to the established schema.
 
   - repo: https://github.com/pdm-project/pdm
-    rev: 2.4.6
+    rev: 2.5.3
     hooks:
       - id: pdm-lock-check
 
