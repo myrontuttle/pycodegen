@@ -47,6 +47,8 @@ def just_the_code(llm_text: str) -> Optional[str]:
 
     if "def " not in llm_text:
         # Probably not python code
+        logger.warning("LLM response doesn't appear to be code: ")
+        logger.warning(llm_text)
         return None
     else:
         # We'll probably need to add more conditions as we encounter them
@@ -152,8 +154,13 @@ def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
 @code.command()
 @click.argument("repo_owner")
 @click.argument("repo_name")
-@click.argument("commit_msg")
-def stop(repo_owner: str, repo_name: str, commit_msg: str) -> None:
+@click.option(
+    "-m",
+    "--commit_msg",
+    default="",
+    help="Commit message. " "Generated automatically" " if not provided",
+)
+def stop(repo_owner: str, repo_name: str, commit_msg="") -> None:
     coder = Coder(repo_owner, repo_name)
     coder.complete_active_issue(commit_msg)
 
@@ -293,12 +300,15 @@ class Coder:
         else:
             logger.error(cp_format.stderr)
             return
+        sc.add_files(self.repo, ["."])
+
+        # Make commit msg based on branch_name and work done
         branch_name = sc.get_active_branch_name(self.repo)
-        # TODO: Make commit msg based on branch_name and work done
-        issue_num = todo.issue_num_from_branch_name(branch_name)
-        if issue_num:
-            commit_msg = "Fixes #" + str(issue_num) + ". " + commit_msg
-        git_response_code = sc.add_and_commit(self.repo, ["."], commit_msg)
+        if not commit_msg:
+            commit_msg = sc.generate_commit_msg(self.repo, branch_name)
+            logger.info(f"Commit message: {commit_msg}")
+
+        git_response_code = sc.commit(self.repo, commit_msg)
         if git_response_code != 0:
             return
         git_response_code = sc.safe_merge(self.repo, branch_name)
@@ -324,25 +334,15 @@ class Coder:
         issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
-        messages = [
-            llm.CODER_ROLE,
-            {
-                "role": "user",
-                "content": "In the form of a python "
-                "dictionary, what are the top python "
-                "libraries I could use for the "
-                "following "
-                f"ticket?\n{issue.title}\n"
-                f"{issue.body}\nRespond in the "
-                "form of a python dictionary with "
-                "each library name as the "
-                "key and a string of two sentences "
-                "describing the library "
-                "and why to use it for this ticket "
-                "as the value.",
-            },
-        ]
-        response: str = llm.chat(messages)
+        prompt = (
+            f"In the form of a python dictionary, what are the top "
+            f"python libraries I could use for the following "
+            f"ticket?\n{issue.title}\n{issue.body}\nRespond in the "
+            f"form of a python dictionary with each library name as "
+            f"the key and a string of two sentences describing the "
+            f"library and why to use it for this ticket as the value."
+        )
+        response: str = llm.complete_prompt(prompt)
         if not response:
             return None
 
@@ -360,22 +360,15 @@ class Coder:
         # Lookup alternatives
         rec_list = " or ".join(recommendations.keys())
         # TODO: Do this with a web search to get current best practices
-        alt_messages = [
-            llm.CODER_ROLE,
-            {
-                "role": "user",
-                "content": "In the form of a python dictionary, "
-                "what are some alternative python "
-                f"libraries to using {rec_list}? "
-                "Respond in the form of a python "
-                "dictionary with each library name as "
-                "the key and a string of two "
-                "sentences describing the library "
-                "and why to use it for this ticket "
-                "as the value.",
-            },
-        ]
-        alt_response: str = llm.chat(alt_messages)
+        alt_prompt = (
+            f"In the form of a python dictionary, what are some "
+            f"alternative python libraries to using {rec_list}? "
+            f"Respond in the form of a python dictionary with each "
+            f"library name as the key and a string of two "
+            f"sentences describing the library and why to use it "
+            f"for this ticket as the value."
+        )
+        alt_response: str = llm.complete_prompt(alt_prompt)
         if alt_response:
             alt_response = alt_response[
                 alt_response.find("{") : alt_response.find("}") + 1
@@ -386,7 +379,7 @@ class Coder:
                 logger.error(str(jde))
                 logger.debug(
                     "Unable to get library alternatives.\n"
-                    f"Messages: {str(alt_messages)}\n"
+                    f"Messages: {str(alt_prompt)}\n"
                     f"Response: {alt_response}"
                 )
 
@@ -443,17 +436,13 @@ class Coder:
         issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what filename it would recommend for issue
-        messages = [
-            llm.CODER_ROLE,
-            {
-                "role": "user",
-                "content": "What should I name the python script that "
-                f"solves the following issue?\n{issue.title}"
-                f"\n{issue.body}\nRespond with just the name of "
-                f"the file.",
-            },
-        ]
-        response: str = llm.chat(messages)
+        prompt = (
+            f"What should I name the python script that solves the "
+            f"following issue?\n{issue.title}\n{issue.body}\nRespond "
+            f"with just the name of the file."
+        )
+
+        response: str = llm.complete_prompt(prompt)
         if response:
             response = sanitize_filename(response)
             if response.find(".py") == -1:
@@ -501,19 +490,12 @@ class Coder:
 
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM to provide code for issue
-        messages = [
-            llm.CODER_ROLE,
-            {
-                "role": "user",
-                "content": "Provide python code for a solution "
-                f"to the following issue.\n"
-                f"{use_lib}\n"
-                f"{issue.title}\n"
-                f"{issue.body}\nRespond with just the python code."
-                f"{file_header}",
-            },
-        ]
-        response: str = llm.chat(messages)
+        prompt = (
+            f"Provide python code for a solution to the following "
+            f"issue.\n{use_lib}\n{issue.title}\n{issue.body}\n"
+            f"Respond with just the python code. {file_header}"
+        )
+        response: str = llm.complete_prompt(prompt)
         if response:
             if file_contents:
                 file_contents = add_text_to_module(
@@ -522,13 +504,14 @@ class Coder:
                 )
             else:
                 file_contents = just_the_code(response)
-                file_contents = add_logging(file_contents)
+                if file_contents:
+                    file_contents = add_logging(file_contents)
             with open(file_path, "w") as fp:
                 fp.write(file_contents.replace("\r", ""))
             logger.info(f"Added the following to file {file_path}")
             logger.info(f"{file_contents}")
         else:
-            logger.warning(f"No response from LLM for messages: {messages}")
+            logger.warning(f"No response from LLM for messages: {prompt}")
             logger.warning("No source code written.")
 
 

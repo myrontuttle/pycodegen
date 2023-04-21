@@ -1,10 +1,13 @@
 from typing import List
 
 import logging
+import re
 from pathlib import Path
 
 import git
 from git import Repo
+
+from pycodegen import llm, todo
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,24 +75,181 @@ def get_active_branch_name(repo: Repo) -> str:
     return repo.active_branch.name
 
 
-def add_and_commit(repo: Repo, files: List[str], commit_msg: str) -> int:
+def generate_commit_msg(repo: Repo, branch_name: str) -> str:
     """
-    Adds specified files and commits them to the current branch of the repo
+    Generates a commit message based on the changes in the index (staging)
+    of the provided repo. Run after adding changes to index (e.g. git add .)
+    Parameters
+    ----------
+    repo
+    branch_name
+
+    Returns
+    -------
+    Commit message as a string
+    """
+    # Set the --no-pager option for the git command so that we get everything
+    repo.config_writer().set_value("core", "pager", "")
+
+    # Generate a patch from the staged changes
+    diff = repo.git.diff(
+        "--cached",
+    )
+
+    commit_limit = 60
+    issue_num = todo.issue_num_from_branch_name(branch_name)
+    issue_type = todo.issue_type_from_branch_name(branch_name)
+    if issue_num:
+        commit_limit -= 10
+    if issue_type:
+        commit_limit -= 5
+
+    prompt = (
+        f"Write a git commit message for the following change. Limit "
+        f"the message to just a one-line summary of less "
+        f"then {commit_limit} characters.\n\n"
+    )
+    messages = llm.prompt_to_messages(prompt + diff)
+    # Simple case. No summarizing needed.
+    token_count = llm.num_tokens_from_messages(messages)
+    if token_count <= llm.CH_MAX_TOKENS:
+        result = llm.respond(messages)
+        commit_msg = add_commit_message_info(result, issue_type, issue_num)
+        return commit_msg
+    # Otherwise, summarize the diff
+    summaries = summarize(diff)
+    summary_string = "\n".join(summaries)
+    summary_message = llm.prompt_to_messages(prompt + summary_string)
+    while True:
+        if llm.num_tokens_from_messages(summary_message) <= llm.CH_MAX_TOKENS:
+            break
+        # Summarize the summary
+        summaries = summarize(summary_string)
+        summary_string = "\n".join(summaries)
+        summary_message = llm.prompt_to_messages(prompt + summary_string)
+
+    commit_msg = llm.respond(summary_message)
+    commit_msg = add_commit_message_info(commit_msg, issue_type, issue_num)
+    commit_msg = commit_msg + "\n\n" + "\n".join(summaries)
+    return commit_msg
+
+
+def add_commit_message_info(
+    commit_msg: str, issue_type="", issue_num=""
+) -> str:
+    """
+    Adds issue type and number to the commit message
+    Parameters
+    ----------
+    commit_msg
+    issue_type
+    issue_num
+
+    Returns
+    -------
+    Commit message with issue type and number
+    """
+    if issue_num:
+        commit_msg = commit_msg + " Fixes #" + str(issue_num)
+    if issue_type:
+        commit_msg = issue_type + ": " + commit_msg
+    return commit_msg
+
+
+def summarize(text: str, split_re=None) -> List[str]:
+    """Summarize a single diff or set of diff summaries"""
+    if split_re is None:
+        split_re = [
+            r"^(diff )",  # First try to split by diff
+            "^$",  # Then try blank line
+            "\n",  # Then try newline
+        ]
+    prompt = "Summarize the following: "
+    query = prompt + text
+    query_message = llm.prompt_to_messages(query)
+    token_count = llm.num_tokens_from_messages(query_message)
+
+    if token_count <= llm.CH_MAX_TOKENS:
+        return [llm.respond(query_message)]
+
+    summaries = []
+    parts = re.split(split_re[0], text, flags=re.MULTILINE)
+    combined_parts = []
+    # Now go back through and put the split string back together with the next
+    # thing
+    for part in parts:
+        if re.match(split_re[0], part) or not combined_parts:
+            combined_parts.append(part)
+        else:
+            combined_parts[-1] += part
+    parts = combined_parts
+
+    chunk = [parts[0]]
+    chunk_token_count = llm.num_tokens_from_messages(
+        llm.prompt_to_messages(parts[0])
+    )
+    for part in parts[1:]:
+        part_token_count = llm.num_tokens_from_messages(
+            llm.prompt_to_messages(part)
+        )
+        # print(f">>> {split_re[0]!r}",
+        #      chunk_token_count,
+        #      len(chunk),
+        #      part_token_count,
+        #      max_token_count[args.model])
+
+        if chunk_token_count + part_token_count >= llm.CH_MAX_TOKENS:
+            text = "".join(chunk)
+            text_message = llm.prompt_to_messages(text)
+            chunk = []
+            if llm.num_tokens_from_messages(text_message) > llm.CH_MAX_TOKENS:
+                # Need to split using a different regex
+                summaries.extend(summarize(text, split_re=split_re[1:]))
+            else:
+                summaries.append(llm.complete_prompt(prompt + text))
+            chunk_token_count = sum(
+                llm.num_tokens_from_messages(llm.prompt_to_messages(c))
+                for c in chunk
+            )
+        chunk.append(part)
+        chunk_token_count += part_token_count
+    return summaries
+
+
+def add_files(repo: Repo, files: List[str]) -> None:
+    """
+    Adds specified files to the repo index/staging
 
     Parameters
     ----------
     repo
     files
+
+    Returns
+    -------
+    Status Code
+    """
+    # Stage changes
+    if files[0] == ".":
+        repo.git.add(all=True)
+    else:
+        repo.index.add(files)
+
+
+def commit(repo: Repo, commit_msg: str) -> int:
+    """
+    Commits changes to the current branch of the repo
+
+    Parameters
+    ----------
+    repo
     commit_msg
 
     Returns
     -------
     Status Code
     """
-    if files[0] == ".":
-        repo.git.add(all=True)
-    else:
-        repo.index.add(files)
+    # Commit changes
     try:
         repo.git.commit(m=commit_msg)
         # repo.index.commit(commit_msg)

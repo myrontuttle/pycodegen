@@ -9,4 +9,4 @@ def test_issue_title_to_branch_name():
 def test_issue_num_from_branch_name():
     branch_name = "feat/3/test_Test_an_issue"
     issue_num = todo.issue_num_from_branch_name(branch_name)
-    assert issue_num == 3
+    assert issue_num == "3"

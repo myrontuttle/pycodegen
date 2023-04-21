@@ -2,6 +2,7 @@
 
 from pytest_bdd import given, scenario, then, when
 
+from pycodegen import sc
 from pycodegen.coder import Coder
 
 repo_owner = "myrontuttle"
@@ -53,3 +54,7 @@ def check_code_generated():
         contents = tfp.read()
         assert contents
         assert contents.find("logger") != -1
+    # Cleanup
+    branch_name = sc.get_active_branch_name(coder.repo)
+    sc.use_branch(coder.repo, "main")
+    sc.delete_branch(coder.repo, branch_name)
