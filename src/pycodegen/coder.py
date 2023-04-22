@@ -10,7 +10,6 @@ from pathlib import Path
 
 import click
 import tomli
-from github.Issue import Issue
 from pathvalidate import sanitize_filename
 
 from pycodegen import llm, sc, tester, todo
@@ -145,7 +144,9 @@ def code():
 @click.option("-i", "--issue_num", type=int)
 def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
     coder = Coder(repo_owner, repo_name)
-    coder.open_issue(issue_num)
+    response = coder.open_issue(issue_num)
+    if response == 0:
+        click.echo("Successfully started issue")
 
 
 @code.command()
@@ -157,9 +158,11 @@ def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
     default="",
     help="Commit message. " "Generated automatically" " if not provided",
 )
-def stop(repo_owner: str, repo_name: str, commit_msg="") -> None:
+def finish(repo_owner: str, repo_name: str, commit_msg="") -> None:
     coder = Coder(repo_owner, repo_name)
-    coder.complete_active_issue(commit_msg)
+    response = coder.complete_active_issue(commit_msg)
+    if response == 0:
+        click.echo("Successfully completed issue")
 
 
 class Coder:
@@ -232,38 +235,44 @@ class Coder:
             else:
                 logger.error(cp_setup.stderr)
 
-    def open_issue(self, issue_num: Optional[int]) -> Optional[Issue]:
+    def open_issue(self, issue_num: Optional[int]) -> int:
         """
         Open an issue to work on. Either a specific issue or next available
         Args:
             issue_num
 
         Returns:
-            The issue we're working on if available
+            response code
         """
         if issue_num:
             issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
         else:
             issue = todo.get_next_issue(self.repo_owner, self.repo_name)
         if not issue:
-            return None
+            return 1
+        logger.info(f"Working on issue {issue.number}: {issue.title}")
 
         # Pull repo
         if self.repo.active_branch.name == "main":
             self.repo.git.pull()
         else:
             self.repo.git.fetch()
+        logger.info("Pulled repo")
 
         # Checkout git branch
         branch_name = todo.issue_title_to_branch_name(
             self.repo_owner, self.repo_name, issue
         )
         sc.use_branch(self.repo, branch_name)
+        logger.info(f"Created branch {branch_name}")
 
         # Create functional test if new feature
         if branch_name.startswith(todo.feature_prepend):
             feature_path = tester.create_feature(self.repo_path, issue)
-            tester.create_step_defs(feature_path)
+            logger.info(f"Created feature file {feature_path}")
+            test_path = tester.create_step_defs(feature_path)
+            if test_path:
+                logger.info(f"Created test file {test_path}")
 
             # Add recommended library
             libs = self.recommend_libraries(issue_num)
@@ -275,11 +284,15 @@ class Coder:
             file_name = self.recommend_filename(issue_num)
             self.write_code(issue_num, file_name, best_lib)
 
-        return issue
+        return 0
 
-    def complete_active_issue(self, commit_msg: str):
+    def complete_active_issue(self, commit_msg: str) -> int:
         """
         Formats, commits, merge, and push any work on active branch
+        Args:
+            commit_msg: Commit message
+        Returns:
+            Completion response code
         """
         os.chdir(self.repo_path)
         cp_format = subprocess.run(
@@ -294,7 +307,7 @@ class Coder:
             logger.info(cp_format.stdout)
         else:
             logger.error(cp_format.stderr)
-            return
+            return 1
         sc.add_files(self.repo, ["."])
 
         # Make commit msg based on branch_name and work done
@@ -305,25 +318,28 @@ class Coder:
 
         git_response_code = sc.commit(self.repo, commit_msg)
         if git_response_code != 0:
-            return
+            return 1
+        logger.info("Committed changes")
         git_response_code = sc.safe_merge(self.repo, branch_name)
         if git_response_code != 0:
-            return
+            return 1
+        logger.info("Merged changes")
         git_response_code = sc.push_to_origin(self.repo)
         if git_response_code != 0:
-            return
+            return 1
+        logger.info("Pushed changes")
         sc.delete_branch(self.repo, branch_name)
+        logger.info(f"Deleted branch {branch_name}")
+        return 0
 
     def recommend_libraries(self, issue_num: int) -> Optional[Dict[str, str]]:
         """
         Recommends a library based on an issue
-        Parameters
-        ----------
-        issue_num
+        Args:
+            issue_num
 
-        Returns
-        -------
-        Recommended library
+        Returns:
+            Recommended library
         """
         # Get Issue
         issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
@@ -420,13 +436,11 @@ class Coder:
     def recommend_filename(self, issue_num: int) -> str:
         """
         Recommend a filename to create or add to for the issue
-        Parameters
-        ----------
-        issue_num
+        Args:
+            issue_num
 
-        Returns
-        -------
-        Filename
+        Returns:
+            Filename
         """
         # Get Issue
         issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
