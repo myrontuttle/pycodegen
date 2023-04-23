@@ -4,7 +4,7 @@ build-backend = "pdm.pep517.api"
 
 [project]
 name = "pycodegen"
-version = "0.0.0"
+version = "0.1.0"
 description = "Python Code Generator"
 authors = [
     {name = "Myron Tuttle", email = "myrongt@gmail.com"}
@@ -19,9 +19,7 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Topic :: Documentation",
     "Topic :: Software Development",
-    "Topic :: Software Development :: Documentation",
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
@@ -37,6 +35,12 @@ dependencies = [
     "pathvalidate>=2.5.2",
     "openai>=0.27.4",
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/myrontuttle/pycodegen"
+
+[project.scripts]
+coder = "pycodegen.coder:code"
 
 [tool.pdm]
 version = {source = "scm"}
