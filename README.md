@@ -26,10 +26,28 @@ or install with `PDM`
 pdm add pycodegen
 ```
 
+or install with `pipx1
+
+```bash
+pipx install git+https://github.com/myrontuttle/pycodegen.git
+```
+
 ## Usage
 
 ```python
 import pycodegen
+
+coder = Coder(repo_owner, repo_name)
+response_code = coder.open_issue(issue_num)
+# Work on issue
+response_code = coder.complete_active_issue(commit_msg)
+```
+
+If installed with pipx
+```bash
+coder start <githubaccount> <project> [-i <issuenumber>]
+# Work on issue
+coder finish <githubaccount> <project> [-m "<commit message>"]
 ```
 
 ### Makefile usage
