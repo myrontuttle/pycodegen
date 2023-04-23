@@ -26,7 +26,7 @@ or install with `PDM`
 pdm add pycodegen
 ```
 
-or install with `pipx1
+or install with `pipx1`
 
 ```bash
 pipx install git+https://github.com/myrontuttle/pycodegen.git
