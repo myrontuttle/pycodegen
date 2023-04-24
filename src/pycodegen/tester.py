@@ -171,22 +171,25 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
     test_filename = "test_" + feature_name + ".py"
     test_root = feature_path.parent.joinpath("..")
     test_path = test_root.joinpath(step_def_dir).joinpath(test_filename)
-    cp_step_def = subprocess.run(
-        [
-            "pytest-bdd",
-            "generate",
-            f"{feature_path}",
-        ],
-        capture_output=True,
-    )
-    if cp_step_def.returncode == 0:
-        with open(test_path, "w") as tp:
-            test_body = cp_step_def.stdout.decode("UTF-8", errors="ignore")
-            tp.write(test_body.replace("\r", ""))
-        fix_step_def_functions(test_path)
-        return test_path
-    else:
-        logger.error(cp_step_def.stderr)
+    try:
+        cp_step_def = subprocess.run(
+            [
+                "pytest-bdd",
+                "generate",
+                f"{feature_path}",
+            ],
+            capture_output=True,
+        )
+        if cp_step_def.returncode == 0:
+            with open(test_path, "w") as tp:
+                test_body = cp_step_def.stdout.decode("UTF-8", errors="ignore")
+                tp.write(test_body.replace("\r", ""))
+            fix_step_def_functions(test_path)
+            return test_path
+        else:
+            logger.error(cp_step_def.stderr)
+    except FileNotFoundError as err:
+        logger.error(err)
 
 
 def fix_step_def_functions(test_path: Path) -> None:
