@@ -17,6 +17,7 @@ from pycodegen import llm, sc, tester, todo
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%d-%b-%y %H:%M:%S",
 )
 
 logger = logging.getLogger(__name__)
@@ -63,14 +64,12 @@ def just_the_code(llm_text: str) -> Optional[str]:
 def add_text_to_module(module_text: str, text_to_add: str) -> str:
     """
     Adds function text to module text in an organized way
-    Parameters
-    ----------
-    module_text
-    text_to_add
+    Args:
+        module_text
+        text_to_add
 
-    Returns
-    -------
-    Updated module text
+    Returns:
+        Updated module text
     """
     class_loc = module_text.find("class ")
     main_loc = module_text.find('if __name__ == "__main__":')
@@ -176,10 +175,9 @@ class Coder:
     def __init__(self, owner_name: str, repo_name: str):
         """
         Initializes a coder on a project repo
-        Parameters
-        ----------
-        owner_name
-        repo_name
+        Args:
+            owner_name
+            repo_name
         """
         self.repo_owner = owner_name
         self.repo_name = repo_name
@@ -265,10 +263,18 @@ class Coder:
         sc.use_branch(self.repo, branch_name)
         logger.info(f"Created branch {branch_name}")
 
+        # Recommend module to work with
+        src_file_name = self.recommend_filename(issue_num)
+
         # Create unit tests if bug or feature
         issue_type = todo.get_issue_type(github_repo, issue)
         if issue_type == "bug" or issue_type == "feature":
-            test_path = tester.create_unit_tests(issue.body, issue_type)
+            test_path = tester.create_unit_tests(
+                self.repo_path,
+                src_file_name,
+                issue.body,
+                issue_type,
+            )
             logger.info(f"Created test file {test_path}")
 
         # Create functional test if new feature
@@ -279,15 +285,14 @@ class Coder:
             if test_path:
                 logger.info(f"Created test file {test_path}")
 
-            # Recommended library
-            libs = self.recommend_libraries(issue_num)
-            best_lib = ""
-            if libs:
-                best_lib = list(libs)[0]
+        # Recommended library
+        libs = self.recommend_libraries(issue_num)
+        best_lib = ""
+        if libs:
+            best_lib = list(libs)[0]
 
-            # Start writing code for the issue
-            file_name = self.recommend_filename(issue_num)
-            self.write_code(issue_num, file_name, best_lib)
+        # Start writing code for the issue
+        self.write_code(issue_num, src_file_name, best_lib)
 
         return 0
 
@@ -360,8 +365,8 @@ class Coder:
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
         prompt = (
-            f"In the form of a python dictionary, what are the top "
-            f"python libraries I could use for the following "
+            f"In the form of a python dictionary with JSON string syntax, "
+            f"what are the top python libraries I could use for the following "
             f"ticket?\n{issue.title}\n{issue.body}\nRespond in the "
             f"form of a python dictionary with each library name as "
             f"the key and a string of two sentences describing the "
@@ -374,7 +379,8 @@ class Coder:
         click.echo(f"Recommended Libraries for issue #{str(issue_num)}:")
         click.echo(response)
         response = response[response.find("{") : response.find("}") + 1]
-        response = response.replace("'", '"')
+        if response.find("': ") != -1:
+            response = response.replace("'", '"')
         try:
             recommendations = json.loads(response)
         except JSONDecodeError as jde:
@@ -447,11 +453,12 @@ class Coder:
         else:
             logger.error(cp_add_lib.stderr)
 
-    def recommend_filename(self, issue_num: int) -> str:
+    def recommend_filename(self, issue_num: int, pkg_name="") -> str:
         """
         Recommend a filename to create or add to for the issue
         Args:
-            issue_num
+            issue_num: Issue number
+            pkg_name: Package name
 
         Returns:
             Filename
@@ -459,18 +466,43 @@ class Coder:
         # Get Issue
         github_repo = todo.get_repo(self.repo_owner, self.repo_name)
         issue = todo.get_issue(github_repo, issue_num)
-        # TODO: Consider adding project description for context in prompt
+        # Get existing src files
+        if not pkg_name:
+            # Assume package name same as repo name
+            pkg_name = self.repo_name.replace("-", "_")
+        src_dir = self.repo_path.joinpath("src").joinpath(pkg_name)
+        src_files = [
+            str(f)
+            for f in os.listdir(src_dir)
+            if os.path.isfile(os.path.join(src_dir, f))
+            and str(f).endswith(".py")
+            and str(f) != "__init__.py"
+        ]
         # Ask Chat LLM what filename it would recommend for issue
-        prompt = (
-            f"What should I name the python script that solves the "
-            f"following issue?\n{issue.title}\n{issue.body}\nRespond "
-            f"with just the name of the file."
-        )
+        if src_files:
+            prompt = (
+                f"Recommend one of these source files ("
+                f"{', '.join(src_files)}) to add "
+                f"python code that would solve the below issue. "
+                f"If none of the source files is appropriate, respond with "
+                f"a new file name.\n"
+                f"Issue: {issue.title}\n{issue.body}\n"
+                f"Respond with just the name of the file."
+            )
+        else:
+            prompt = (
+                f"What should I name the python script that solves the "
+                f"following issue?\n"
+                f"Issue: {issue.title}\n{issue.body}\n"
+                f"Respond with just the name of the file."
+            )
 
         response: str = llm.complete_prompt(prompt)
         if response:
+            if response.find(" ") != -1:
+                response = response[response.rfind(" ") + 1 :]
             response = sanitize_filename(response)
-            if response.find(".py") == -1:
+            if not response.endswith(".py"):
                 response += ".py"
             return response
         else:

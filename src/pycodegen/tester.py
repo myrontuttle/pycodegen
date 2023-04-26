@@ -243,6 +243,7 @@ def fix_step_def_functions(test_path: Path) -> None:
 
 def create_unit_tests(
     repo_path: Path,
+    src_file_name: str,
     issue_body: str,
     issue_type: str,
 ) -> Optional[Path]:
@@ -250,6 +251,7 @@ def create_unit_tests(
     Create unit tests from issue description
     Args:
         repo_path: Path to repo
+        src_file_name: Source file name
         issue_body: Issue description
         issue_type: Issue type
 
@@ -354,7 +356,7 @@ def create_unit_tests(
         }
     )
     # Write result to test file
-    test_file_name = "test_" + issue_type + ".py"
+    test_file_name = "test_" + src_file_name
     test_file_path = (
         repo_path.joinpath(tests_dir)
         .joinpath(unit_dir)
