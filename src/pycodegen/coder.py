@@ -185,7 +185,7 @@ class Coder:
         self.repo_name = repo_name
         self.repo = sc.use_repo(self.work_dir, self.repo_name, self.repo_owner)
         self.repo_path = self.work_dir.joinpath(self.repo_name)
-        tester.create_bdd_dirs(self.repo_path)
+        tester.create_test_dirs(self.repo_path)
 
         venv_path = self.repo_path.joinpath(".venv")
         # TODO: Use appropriate python version in following subprocesses
@@ -244,8 +244,9 @@ class Coder:
         Returns:
             response code
         """
+        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
         if issue_num:
-            issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+            issue = todo.get_issue(github_repo, issue_num)
         else:
             issue = todo.get_next_issue(self.repo_owner, self.repo_name)
         if not issue:
@@ -260,21 +261,25 @@ class Coder:
         logger.info("Pulled repo")
 
         # Checkout git branch
-        branch_name = todo.issue_title_to_branch_name(
-            self.repo_owner, self.repo_name, issue
-        )
+        branch_name = todo.issue_title_to_branch_name(github_repo, issue)
         sc.use_branch(self.repo, branch_name)
         logger.info(f"Created branch {branch_name}")
 
+        # Create unit tests if bug or feature
+        issue_type = todo.get_issue_type(github_repo, issue)
+        if issue_type == "bug" or issue_type == "feature":
+            test_path = tester.create_unit_tests(issue.body, issue_type)
+            logger.info(f"Created test file {test_path}")
+
         # Create functional test if new feature
-        if branch_name.startswith(todo.feature_prepend):
+        if issue_type == "feature":
             feature_path = tester.create_feature(self.repo_path, issue)
             logger.info(f"Created feature file {feature_path}")
             test_path = tester.create_step_defs(feature_path)
             if test_path:
                 logger.info(f"Created test file {test_path}")
 
-            # Add recommended library
+            # Recommended library
             libs = self.recommend_libraries(issue_num)
             best_lib = ""
             if libs:
@@ -342,7 +347,8 @@ class Coder:
             Recommended library
         """
         # Get Issue
-        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
+        issue = todo.get_issue(github_repo, issue_num)
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
         prompt = (
@@ -443,7 +449,8 @@ class Coder:
             Filename
         """
         # Get Issue
-        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
+        issue = todo.get_issue(github_repo, issue_num)
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what filename it would recommend for issue
         prompt = (
@@ -477,7 +484,8 @@ class Coder:
             None
         """
         # Get Issue
-        issue = todo.get_issue(self.repo_owner, self.repo_name, issue_num)
+        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
+        issue = todo.get_issue(github_repo, issue_num)
 
         # Get File
         file_path = (

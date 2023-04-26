@@ -15,9 +15,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-feature_prepend = "feat"
-bug_prepend = "fix"
-chore_prepend = "chore"
+feature_branch_prefix = "feat"
+bug_branch_prefix = "fix"
+doc_branch_prefix = "docs"
+chore_branch_prefix = "chore"
 
 
 def get_gh_token_from_env() -> Optional[str]:
@@ -43,14 +44,12 @@ def get_next_issue(repo_owner: str, repo_name: str) -> Optional[Issue]:
     """
     Get the next task for repo
 
-    Parameters
-    ----------
-    repo_owner
-    repo_name
+    Args:
+        repo_owner
+        repo_name
 
-    Returns
-    -------
-    GitHub Issue representing the next task to do (None if no more issues)
+    Returns:
+        GitHub Issue representing the next task to do (None if no more issues)
     """
     repo = get_repo(repo_owner, repo_name)
     if not repo:
@@ -69,24 +68,18 @@ def get_next_issue(repo_owner: str, repo_name: str) -> Optional[Issue]:
     return next_open_issue
 
 
-def get_issue(
-    repo_owner: str, repo_name: str, issue_num: int
-) -> Optional[Issue]:
+def get_issue(repo: Repository, issue_num: int) -> Optional[Issue]:
     """
     Get a specific task to do for repo
 
-    Parameters
-    ----------
-    repo_owner
-    repo_name
-    issue_num
+    Args:
+        repo
+        issue_num
 
-    Returns
-    -------
-    GitHub Issue representing the issue specified (None if no issue with
-    that number)
+    Returns:
+        GitHub Issue representing the issue specified (None if no issue with
+        that number)
     """
-    repo = get_repo(repo_owner, repo_name)
     if not repo:
         return None
     try:
@@ -96,28 +89,49 @@ def get_issue(
         return None
 
 
-def issue_title_to_branch_name(
-    repo_owner: str, repo_name: str, issue: Issue
-) -> str:
+def get_issue_type(repo: Repository, issue: Issue) -> Optional[str]:
+    """
+    Determine the issue type from the labels
+
+    Args:
+        repo
+        issue
+
+    Returns:
+        Issue type (str)
+    """
+    if issue.labels:
+        if repo.get_label("enhancement") in issue.labels:
+            return "feature"
+        elif repo.get_label("bug") in issue.labels:
+            return "bug"
+        elif repo.get_label("documentation") in issue.labels:
+            return "docs"
+        else:
+            return "chore"
+    else:
+        return None
+
+
+def issue_title_to_branch_name(repo: Repository, issue: Issue) -> str:
     """
     Provide a branch name based on naming conventions for an issue
-    Parameters
-    ----------
-    repo_owner
-    repo_name
-    issue
+    Args:
+        repo
+        issue
 
-    Returns
-    -------
-    branch_name (str)
+    Returns:
+        branch_name (str)
     """
-    repo = get_repo(repo_owner, repo_name)
-    if repo.get_label("enhancement") in issue.labels:
-        branch_name = feature_prepend
-    elif repo.get_label("bug") in issue.labels:
-        branch_name = bug_prepend
+    issue_type = get_issue_type(repo, issue)
+    if issue_type == "feature":
+        branch_name = feature_branch_prefix
+    elif issue_type == "bug":
+        branch_name = bug_branch_prefix
+    elif issue_type == "docs":
+        branch_name = doc_branch_prefix
     else:
-        branch_name = chore_prepend
+        branch_name = chore_branch_prefix
     branch_name += f"/{issue.number}/"
     branch_name += issue.title.replace(" ", "-")
     return branch_name

@@ -102,7 +102,7 @@ def num_tokens_from_messages(
     else:
         raise NotImplementedError(
             f"""num_tokens_from_messages() is not presently implemented for
-            model {model}.
-  See https://github.com/openai/openai-python/blob/main/chatml.md for
-  information on how messages are converted to tokens."""
+model {model}.
+See https://github.com/openai/openai-python/blob/main/chatml.md for
+information on how messages are converted to tokens."""
         )

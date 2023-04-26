@@ -6,6 +6,14 @@ import subprocess
 from pathlib import Path
 
 from github.Issue import Issue
+from langchain.chains import LLMChain, SequentialChain
+from langchain.chat_models import ChatOpenAI
+from langchain.memory import SimpleMemory
+from langchain.prompts import PromptTemplate
+from langchain.prompts.chat import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+)
 
 from pycodegen import llm
 
@@ -19,36 +27,34 @@ logger = logging.getLogger(__name__)
 tests_dir = "tests"
 features_dir = "features"
 step_def_dir = "functional"
+unit_dir = "unit"
 
 
-def create_bdd_dirs(repo_path: Path) -> None:
+def create_test_dirs(repo_path: Path) -> None:
     """
-    Add directories for features and step definitions if they don't exist
+    Add directories for features, step definitions, and unit tests if they
+    don't exist
+    Args:
+        repo_path
 
-    Parameters
-    ----------
-    repo_path
-
-    Returns
-    -------
-    None
+    Returns:
+        None
     """
     tests_path = repo_path.joinpath(tests_dir)
     tests_path.joinpath(features_dir).mkdir(parents=True, exist_ok=True)
     tests_path.joinpath(step_def_dir).mkdir(parents=True, exist_ok=True)
+    tests_path.joinpath(unit_dir).mkdir(parents=True, exist_ok=True)
 
 
 def create_feature(repo_path: Path, issue: Issue) -> Path:
     """
     Create feature file from issue
-    Parameters
-    ----------
-    repo_path
-    issue
+    Args:
+        repo_path
+        issue
 
-    Returns
-    -------
-    Feature file path
+    Returns:
+        Feature file path
     """
     feature_name = issue.title.replace(" ", "_") + ".feature"
     feature_file_path = (
@@ -85,13 +91,11 @@ def create_feature(repo_path: Path, issue: Issue) -> Path:
 def get_scenarios_from_issue_body(issue_body: str) -> List[str]:
     """
     Returns a list of scenarios from the issue body
-    Parameters
-    ----------
-    issue_body
+    Args:
+        issue_body
 
-    Returns
-    -------
-    List of scenarios
+    Returns:
+        List of scenarios
     """
     scenarios = []
     scenario_loc = issue_body.find("cenario:")
@@ -113,13 +117,11 @@ def get_scenarios_from_issue_body(issue_body: str) -> List[str]:
 def indent_sub_lines(issue_body: str) -> str:
     """
     Indent lines in the issue body that don't start with Feature or Scenario
-    Parameters
-    ----------
-    issue_body
+    Args:
+        issue_body
 
-    Returns
-    -------
-    Issue body with sub lines indented
+    Returns:
+        Issue body with sub lines indented
     """
     # Remove all carriage returns and add back in only "\n"
     issue_lines = issue_body.splitlines(False)
@@ -228,8 +230,144 @@ def fix_step_def_functions(test_path: Path) -> None:
             prompt = prompt_base + step_def
             response = llm.complete_prompt(prompt=prompt)
             if response:
-                response = response.replace("def ", "").replace("():", "")
+                response = (
+                    response.replace("def ", "")
+                    .replace("()", "")
+                    .replace(":", "")
+                )
                 test_lines[idx] = line.replace("_", response)
 
     with open(test_path, "w") as tp:
         tp.writelines(test_lines)
+
+
+def create_unit_tests(
+    repo_path: Path,
+    issue_body: str,
+    issue_type: str,
+) -> Optional[Path]:
+    """
+    Create unit tests from issue description
+    Args:
+        repo_path: Path to repo
+        issue_body: Issue description
+        issue_type: Issue type
+
+    Returns:
+        unit test file path
+    """
+    chat = ChatOpenAI(model_name="gpt-3.5-turbo")
+    role_template = (
+        "You are a great QA engineer preparing a suite of unit "
+        "tests for Test Driven Development. "
+    )
+    # Create test cases
+    test_case_template = (
+        "{role}Evaluate the following {issue_type} and "
+        "return a list of all of the test cases that "
+        "should be tested.\nIssue: {issue_body}"
+    )
+    test_case_prompt = HumanMessagePromptTemplate(
+        prompt=PromptTemplate.from_template(test_case_template)
+    )
+    test_case_chat = ChatPromptTemplate.from_messages([test_case_prompt])
+    test_case_chain = LLMChain(
+        llm=chat,
+        prompt=test_case_chat,
+        output_key="test_cases",
+    )
+    # Critique test cases
+    critique_template = (
+        "{role}Compare the list of test cases with the "
+        "{issue_type}. Which of the test "
+        "cases are redundant, incorrect, or can be "
+        "simplified?\nIssue: {issue_body}\n"
+        "Test cases:\n{test_cases}"
+    )
+    critique_prompt = HumanMessagePromptTemplate(
+        prompt=PromptTemplate.from_template(critique_template)
+    )
+    critique_chat = ChatPromptTemplate.from_messages([critique_prompt])
+    critique_chain = LLMChain(
+        llm=chat,
+        prompt=critique_chat,
+        output_key="critique",
+    )
+    # Write updated test cases
+    update_template = (
+        "{role}\n"
+        "For {issue_type}: {issue_body}\n"
+        "You wrote test cases:\n{test_cases}"
+        "You critiqued the test cases:\n{critique}"
+        "Write what the test cases should be (if there are no "
+        "changes needed, please repeat the test cases):\n"
+    )
+    update_prompt = HumanMessagePromptTemplate(
+        prompt=PromptTemplate.from_template(update_template)
+    )
+    update_chat = ChatPromptTemplate.from_messages([update_prompt])
+    update_chain = LLMChain(
+        llm=chat,
+        prompt=update_chat,
+        output_key="updated_test_cases",
+    )
+    # Write unit tests
+    unit_test_template = (
+        "{role}Write python pytest unit tests for the "
+        "following test cases:\n{updated_test_cases}\n"
+        "Good unit tests should be independent, "
+        "deterministic, self-validating, "
+        "isolated, reproducible, and take advantage of the "
+        "features of pytest to make the tests easy to "
+        "write and maintain."
+    )
+    unit_test_prompt = HumanMessagePromptTemplate(
+        prompt=PromptTemplate.from_template(unit_test_template)
+    )
+    unit_test_chat = ChatPromptTemplate.from_messages([unit_test_prompt])
+    unit_test_chain = LLMChain(
+        llm=chat,
+        prompt=unit_test_chat,
+        output_key="unit_tests",
+    )
+    create_tests_chain = SequentialChain(
+        memory=SimpleMemory(memories={"role": role_template}),
+        chains=[
+            test_case_chain,
+            critique_chain,
+            update_chain,
+            unit_test_chain,
+        ],
+        input_variables=["issue_body", "issue_type"],
+        output_variables=[
+            "test_cases",
+            "critique",
+            "updated_test_cases",
+            "unit_tests",
+        ],
+        verbose=True,
+    )
+    result = create_tests_chain(
+        {
+            "issue_body": issue_body,
+            "issue_type": issue_type,
+        }
+    )
+    # Write result to test file
+    test_file_name = "test_" + issue_type + ".py"
+    test_file_path = (
+        repo_path.joinpath(tests_dir)
+        .joinpath(unit_dir)
+        .joinpath(test_file_name)
+    )
+
+    if os.path.exists(test_file_path):
+        logger.warning(
+            f"Test file {test_file_path} already exists. Adding test(s)."
+        )
+        with open(test_file_path, "a") as fp:
+            fp.write("\n\n" + result["unit_tests"])
+    else:
+        with open(test_file_path, "w") as fp:
+            fp.write(result["unit_tests"])
+    return test_file_path
