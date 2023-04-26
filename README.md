@@ -40,7 +40,7 @@ import pycodegen
 coder = Coder(repo_owner, repo_name)
 response_code = coder.open_issue(issue_num)
 # Work on issue
-response_code = coder.complete_active_issue(commit_msg)
+response_code = coder.finish_issue(commit_msg)
 ```
 
 If installed with pipx

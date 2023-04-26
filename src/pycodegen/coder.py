@@ -160,7 +160,7 @@ def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
 )
 def finish(repo_owner: str, repo_name: str, commit_msg="") -> None:
     coder = Coder(repo_owner, repo_name)
-    response = coder.complete_active_issue(commit_msg)
+    response = coder.finish_issue(commit_msg)
     if response == 0:
         click.echo("Successfully completed issue")
 
@@ -291,7 +291,7 @@ class Coder:
 
         return 0
 
-    def complete_active_issue(self, commit_msg: str) -> int:
+    def finish_issue(self, commit_msg: str) -> int:
         """
         Formats, commits, merge, and push any work on active branch
         Args:
@@ -319,7 +319,15 @@ class Coder:
         branch_name = sc.get_active_branch_name(self.repo)
         if not commit_msg:
             commit_msg = sc.generate_commit_msg(self.repo, branch_name)
-            logger.info(f"Commit message: {commit_msg}")
+        else:
+            issue_type = todo.issue_type_from_branch_name(branch_name)
+            issue_number = todo.issue_num_from_branch_name(branch_name)
+            commit_msg = sc.add_commit_message_info(
+                commit_msg,
+                issue_type,
+                issue_number,
+            )
+        logger.info(f"Commit message: {commit_msg}")
 
         git_response_code = sc.commit(self.repo, commit_msg)
         if git_response_code != 0:

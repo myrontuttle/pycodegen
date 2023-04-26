@@ -31,7 +31,7 @@ def coder_working():
 def coding_complete():
     """they complete the active issue."""
     coder = Coder(repo_owner, test_repo)
-    coder.complete_active_issue(test_commit_msg)
+    coder.finish_issue(test_commit_msg)
 
 
 @then(

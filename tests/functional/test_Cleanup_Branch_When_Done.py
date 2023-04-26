@@ -37,7 +37,7 @@ def complete_work():
     else:
         with open(test_file_path, "w") as fp:
             fp.write("This is the first line\n")
-    coder.complete_active_issue(test_commit_msg)
+    coder.finish_issue(test_commit_msg)
 
 
 @then("the branch is deleted")

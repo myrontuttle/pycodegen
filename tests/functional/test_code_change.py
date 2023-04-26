@@ -63,7 +63,7 @@ def test_code_stop() -> None:
     """
     commit_msg = "Tested an issue"
     coder = Coder(owner, test_repo)
-    coder.complete_active_issue(commit_msg)
+    coder.finish_issue(commit_msg)
     assert sc.get_active_branch_name(coder.repo) == "main"
     assert not coder.repo.is_dirty(untracked_files=True)
 
