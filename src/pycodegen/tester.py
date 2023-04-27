@@ -399,7 +399,14 @@ def write_unit_tests_to_file(
             f"Test file {test_file_path} already exists. Adding test(s)."
         )
         with open(test_file_path, "a") as fp:
-            fp.write("\n\n" + unit_tests)
+            fp.write("\n\n")
+            # Write lines that don't begin with import or from
+            for line in unit_tests.split("\n"):
+                if not line.startswith("import") and not line.startswith(
+                    "from"
+                ):
+                    fp.write("\n" + line)
+            fp.write("\n\n")
     else:
         with open(test_file_path, "w") as fp:
             fp.write(unit_tests)

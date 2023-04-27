@@ -20,6 +20,7 @@ logging.basicConfig(
     datefmt="%d-%b-%y %H:%M:%S",
 )
 
+
 logger = logging.getLogger(__name__)
 
 TEMP_FILE = "temp.py"
@@ -287,6 +288,7 @@ class Coder:
             )
             logger.info(f"Created test file {test_path}")
         else:
+            unit_tests = ""
             logger.info(f"No unit tests created for issue_type={issue_type}")
 
         # Create functional test if new feature
@@ -325,7 +327,6 @@ class Coder:
             capture_output=True,
         )
         if cp_format.returncode == 0:
-            # May be too much to push to logs
             logger.info(cp_format.stdout)
         else:
             logger.error(cp_format.stderr)
@@ -586,6 +587,8 @@ class Coder:
         response: str = llm.complete_prompt(prompt)
         if response:
             if src_file_contents:
+                # Remove existing source file header from response
+                response = response.replace(file_header, "")
                 src_file_contents = add_text_to_module(
                     src_file_contents,
                     just_the_code(response),
