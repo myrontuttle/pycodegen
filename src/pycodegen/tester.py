@@ -222,13 +222,15 @@ def fix_step_def_functions(test_path: Path) -> None:
         if line.startswith("def _():"):
             step_def = (
                 test_lines[idx - 1]
-                .replace("@given(", "")
-                .replace("@when(", "")
-                .replace("@then(", "")
+                .replace("@given(", "Given ")
+                .replace("@when(", "When ")
+                .replace("@then(", "Then ")
                 .replace(")", "")
             )
             prompt = prompt_base + step_def
             response = llm.complete_prompt(prompt=prompt)
+            if response.find(" ") != -1:
+                response = response[response.rfind(" ") + 1 :]
             if response:
                 response = (
                     response.replace("def ", "")
@@ -242,30 +244,31 @@ def fix_step_def_functions(test_path: Path) -> None:
 
 
 def create_unit_tests(
-    repo_path: Path,
     src_file_name: str,
     issue_body: str,
     issue_type: str,
-) -> Optional[Path]:
+    package_name: str,
+) -> Optional[str]:
     """
     Create unit tests from issue description
     Args:
-        repo_path: Path to repo
         src_file_name: Source file name
         issue_body: Issue description
         issue_type: Issue type
+        package_name: Package name
 
     Returns:
         unit test file path
     """
+    source_module = src_file_name[: src_file_name.find(".")]
     chat = ChatOpenAI(model_name="gpt-3.5-turbo")
     role_template = (
         "You are a great QA engineer preparing a suite of unit "
-        "tests for Test Driven Development. "
+        "tests for Test Driven Development."
     )
     # Create test cases
     test_case_template = (
-        "{role}Evaluate the following {issue_type} and "
+        "{role} Evaluate the following {issue_type} and "
         "return a list of all of the test cases that "
         "should be tested.\nIssue: {issue_body}"
     )
@@ -280,7 +283,7 @@ def create_unit_tests(
     )
     # Critique test cases
     critique_template = (
-        "{role}Compare the list of test cases with the "
+        "{role} Compare the list of test cases with the "
         "{issue_type}. Which of the test "
         "cases are redundant, incorrect, or can be "
         "simplified?\nIssue: {issue_body}\n"
@@ -315,13 +318,15 @@ def create_unit_tests(
     )
     # Write unit tests
     unit_test_template = (
-        "{role}Write python pytest unit tests for the "
+        "{role} Write python pytest unit tests for the "
         "following test cases:\n{updated_test_cases}\n"
         "Good unit tests should be independent, "
         "deterministic, self-validating, "
         "isolated, reproducible, and take advantage of the "
         "features of pytest to make the tests easy to "
-        "write and maintain."
+        "write and maintain. For the module under test use the name "
+        "'{source_module}' in the '{package_name}' package (for example: "
+        "from {package_name} import {source_module})."
     )
     unit_test_prompt = HumanMessagePromptTemplate(
         prompt=PromptTemplate.from_template(unit_test_template)
@@ -340,7 +345,12 @@ def create_unit_tests(
             update_chain,
             unit_test_chain,
         ],
-        input_variables=["issue_body", "issue_type"],
+        input_variables=[
+            "issue_body",
+            "issue_type",
+            "source_module",
+            "package_name",
+        ],
         output_variables=[
             "test_cases",
             "critique",
@@ -353,8 +363,29 @@ def create_unit_tests(
         {
             "issue_body": issue_body,
             "issue_type": issue_type,
+            "source_module": source_module,
+            "package_name": package_name,
         }
     )
+    return result["unit_tests"]
+
+
+def write_unit_tests_to_file(
+    repo_path: Path,
+    src_file_name: str,
+    unit_tests: str,
+) -> Path:
+    """
+    Write unit tests to file
+    Args:
+        repo_path:
+        src_file_name:
+        unit_tests:
+
+    Returns:
+
+    """
+
     # Write result to test file
     test_file_name = "test_" + src_file_name
     test_file_path = (
@@ -368,8 +399,8 @@ def create_unit_tests(
             f"Test file {test_file_path} already exists. Adding test(s)."
         )
         with open(test_file_path, "a") as fp:
-            fp.write("\n\n" + result["unit_tests"])
+            fp.write("\n\n" + unit_tests)
     else:
         with open(test_file_path, "w") as fp:
-            fp.write(result["unit_tests"])
+            fp.write(unit_tests)
     return test_file_path

@@ -32,7 +32,7 @@ def issue_and_file():
     """I provide the text of the issue and a file to add code to."""
     coder = Coder(repo_owner, test_repo)
     file_name = coder.recommend_filename(test_issue_num)
-    coder.write_code(test_issue_num, file_name)
+    coder.write_src_code(test_issue_num, file_name)
     files_created.append(file_name)
 
 

@@ -81,3 +81,13 @@ def test_fix_step_def_functions() -> None:
     tester.fix_step_def_functions(test_path)
     with open(test_path) as tp:
         assert tp.read().find("_():") == -1
+
+
+def test_open_issue() -> None:
+    """
+    Test opening an issue
+    """
+    this_owner = "myrontuttle"
+    this_repo = "pycodegen"
+    coder = Coder(this_owner, this_repo)
+    coder.open_issue(34)

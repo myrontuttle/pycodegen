@@ -26,9 +26,9 @@ TEMP_FILE = "temp.py"
 LOGGER_CODE = (
     "\nimport logging\n\n"
     "logging.basicConfig(\n"
-    "\tlevel=logging.INFO,\n"
-    "\tformat='%(asctime)s [%(levelname)s] %(message)s',\n"
-    "\tdatefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
+    "    level=logging.INFO,\n"
+    "    format='%(asctime)s [%(levelname)s] %(message)s',\n"
+    "    datefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
     "logger = logging.getLogger(__name__)\n\n"
 )
 
@@ -263,19 +263,31 @@ class Coder:
         sc.use_branch(self.repo, branch_name)
         logger.info(f"Created branch {branch_name}")
 
+        # TODO: Account for multiple packages, no package, or package name
+        #  different from repo name
+        package_name = self.repo_name.replace("-", "_")
+
         # Recommend module to work with
-        src_file_name = self.recommend_filename(issue_num)
+        src_file_name = self.recommend_filename(issue_num, package_name)
+        logger.info(f"Recommended source file {src_file_name}")
 
         # Create unit tests if bug or feature
         issue_type = todo.get_issue_type(github_repo, issue)
         if issue_type == "bug" or issue_type == "feature":
-            test_path = tester.create_unit_tests(
-                self.repo_path,
+            unit_tests = tester.create_unit_tests(
                 src_file_name,
                 issue.body,
                 issue_type,
+                package_name,
+            )
+            test_path = tester.write_unit_tests_to_file(
+                self.repo_path,
+                src_file_name,
+                unit_tests,
             )
             logger.info(f"Created test file {test_path}")
+        else:
+            logger.info(f"No unit tests created for issue_type={issue_type}")
 
         # Create functional test if new feature
         if issue_type == "feature":
@@ -283,7 +295,7 @@ class Coder:
             logger.info(f"Created feature file {feature_path}")
             test_path = tester.create_step_defs(feature_path)
             if test_path:
-                logger.info(f"Created test file {test_path}")
+                logger.info(f"Created functional test file {test_path}")
 
         # Recommended library
         libs = self.recommend_libraries(issue_num)
@@ -292,7 +304,7 @@ class Coder:
             best_lib = list(libs)[0]
 
         # Start writing code for the issue
-        self.write_code(issue_num, src_file_name, best_lib)
+        self.write_src_code(issue_num, src_file_name, unit_tests, best_lib)
 
         return 0
 
@@ -365,12 +377,12 @@ class Coder:
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
         prompt = (
-            f"In the form of a python dictionary with JSON string syntax, "
+            f"In the form of a JSON object, "
             f"what are the top python libraries I could use for the following "
-            f"ticket?\n{issue.title}\n{issue.body}\nRespond in the "
-            f"form of a python dictionary with each library name as "
+            f"issue?\n{issue.title}\n{issue.body}\nRespond in the "
+            f"form of a JSON object with each library name as "
             f"the key and a string of two sentences describing the "
-            f"library and why to use it for this ticket as the value."
+            f"library and why to use it for this issue as the value."
         )
         response: str = llm.complete_prompt(prompt)
         if not response:
@@ -512,12 +524,15 @@ class Coder:
             )
             return TEMP_FILE
 
-    def write_code(self, issue_num: int, file_name: str, lib_name="") -> None:
+    def write_src_code(
+        self, issue_num: int, src_file_name: str, unit_tests="", lib_name=""
+    ) -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
         Args:
             issue_num
-            file_name
+            src_file_name
+            unit_tests
             lib_name
 
         Returns:
@@ -527,19 +542,32 @@ class Coder:
         github_repo = todo.get_repo(self.repo_owner, self.repo_name)
         issue = todo.get_issue(github_repo, issue_num)
 
-        # Get File
-        file_path = (
+        # Get existing file header
+        src_file_path = (
             self.repo_path.joinpath("src")
             .joinpath(self.repo_name.replace("-", "_"))
-            .joinpath(file_name)
+            .joinpath(src_file_name)
         )
-        file_contents = ""
-        if file_path.exists():
-            with open(file_path, "r") as fp:
-                file_contents = fp.read()
+        src_file_contents = ""
+        if src_file_path.exists():
+            with open(src_file_path, "r") as fp:
+                src_file_contents = fp.read()
         file_header = ""
-        if file_contents:
-            file_header = file_contents[: file_contents.find("def")]
+        if src_file_contents:
+            file_header = (
+                "The existing source file starts with:\n"
+                + src_file_contents[: src_file_contents.find("def")]
+            )
+
+        # Get unit tests that the code should pass
+        unit_test_prompt = ""
+        if unit_tests:
+            unit_test_prompt = (
+                f"The code produced should pass the "
+                f"following unit tests.\n{unit_tests}\n"
+            )
+
+        # Get Library to use
         use_lib = ""
         if lib_name:
             use_lib = f"Use {lib_name} in the solution."
@@ -548,23 +576,27 @@ class Coder:
         # Ask Chat LLM to provide code for issue
         prompt = (
             f"Provide python code for a solution to the following "
-            f"issue.\n{use_lib}\n{issue.title}\n{issue.body}\n"
-            f"Respond with just the python code. {file_header}"
+            f"issue.\n"
+            f"Issue: {issue.title}\n{issue.body}\n\n"
+            f"{use_lib}\n\n"
+            f"{unit_test_prompt}\n"
+            f"Respond with just the python code.\n"
+            f"{file_header}"
         )
         response: str = llm.complete_prompt(prompt)
         if response:
-            if file_contents:
-                file_contents = add_text_to_module(
-                    file_contents,
+            if src_file_contents:
+                src_file_contents = add_text_to_module(
+                    src_file_contents,
                     just_the_code(response),
                 )
             else:
-                file_contents = just_the_code(response)
-                file_contents = add_logging(file_contents)
-            with open(file_path, "w") as fp:
-                fp.write(file_contents.replace("\r", ""))
-            logger.info(f"Added the following to file {file_path}")
-            logger.info(f"{file_contents}")
+                src_file_contents = just_the_code(response)
+                src_file_contents = add_logging(src_file_contents)
+            with open(src_file_path, "w") as fp:
+                fp.write(src_file_contents.replace("\r", ""))
+            logger.info(f"Added the following to file {src_file_path}")
+            logger.info(f"{src_file_contents}")
         else:
             logger.warning(f"No response from LLM for messages: {prompt}")
             logger.warning("No source code written.")
