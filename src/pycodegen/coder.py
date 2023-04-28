@@ -43,7 +43,7 @@ def bump_version(issue_type: str) -> None:
     Returns:
         None
     """
-    if issue_type == "feature":
+    if issue_type == "feature" or issue_type == "feat":
         logger.info("Bumping minor version for feature")
         cp_format = subprocess.run(
             [
@@ -364,9 +364,10 @@ class Coder:
         # Make sure were in repo root dir
         os.chdir(self.repo_path)
 
-        # Auto increment version based on branch name
+        # Auto increment version based on issue
         branch_name = sc.get_active_branch_name(self.repo)
-        issue_type = todo.issue_type_from_branch_name(branch_name)
+        issue_prefix = todo.issue_prefix_from_branch_name(branch_name)
+        issue_type = todo.get_issue_type_from_prefix(issue_prefix)
         bump_version(issue_type)
 
         # Format code
@@ -389,11 +390,11 @@ class Coder:
         if not commit_msg:
             commit_msg = sc.generate_commit_msg(self.repo, branch_name)
         else:
-            issue_type = todo.issue_type_from_branch_name(branch_name)
+            issue_prefix = todo.issue_prefix_from_branch_name(branch_name)
             issue_number = todo.issue_num_from_branch_name(branch_name)
             commit_msg = sc.add_commit_message_info(
                 commit_msg,
-                issue_type,
+                issue_prefix,
                 issue_number,
             )
         logger.info(f"Commit message: {commit_msg}")

@@ -96,10 +96,10 @@ def generate_commit_msg(repo: Repo, branch_name: str) -> str:
 
     commit_limit = 60
     issue_num = todo.issue_num_from_branch_name(branch_name)
-    issue_type = todo.issue_type_from_branch_name(branch_name)
+    issue_prefix = todo.issue_prefix_from_branch_name(branch_name)
     if issue_num:
         commit_limit -= 10
-    if issue_type:
+    if issue_prefix:
         commit_limit -= 5
 
     prompt = (
@@ -112,7 +112,7 @@ def generate_commit_msg(repo: Repo, branch_name: str) -> str:
     token_count = llm.num_tokens_from_messages(messages)
     if token_count <= llm.CH_MAX_TOKENS:
         result = llm.respond(messages)
-        commit_msg = add_commit_message_info(result, issue_type, issue_num)
+        commit_msg = add_commit_message_info(result, issue_prefix, issue_num)
         return commit_msg
     # Otherwise, summarize the diff
     summaries = summarize(diff)
@@ -127,19 +127,19 @@ def generate_commit_msg(repo: Repo, branch_name: str) -> str:
         summary_message = llm.prompt_to_messages(prompt + summary_string)
 
     commit_msg = llm.respond(summary_message)
-    commit_msg = add_commit_message_info(commit_msg, issue_type, issue_num)
+    commit_msg = add_commit_message_info(commit_msg, issue_prefix, issue_num)
     commit_msg = commit_msg + "\n\n" + "\n".join(summaries)
     return commit_msg
 
 
 def add_commit_message_info(
-    commit_msg: str, issue_type="", issue_num=""
+    commit_msg: str, issue_prefix="", issue_num=""
 ) -> str:
     """
-    Adds issue type and number to the commit message
+    Adds issue prefix and number to the commit message
     Args:
         commit_msg
-        issue_type
+        issue_prefix
         issue_num
 
     Returns:
@@ -147,12 +147,12 @@ def add_commit_message_info(
     """
     if issue_num:
         commit_msg = commit_msg + " Fixes #" + str(issue_num)
-    if issue_type:
+    if issue_prefix:
         # Remove issue type from commit message if it's already there
         if commit_msg.find(": ") != -1:
             commit_msg = commit_msg[commit_msg.find(": ") + 2 :]
         # Add issue type from branch name
-        commit_msg = issue_type + ": " + commit_msg
+        commit_msg = issue_prefix + ": " + commit_msg
     return commit_msg
 
 
