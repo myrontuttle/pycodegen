@@ -43,18 +43,8 @@ def bump_version(issue_type: str) -> None:
     Returns:
         None
     """
-    pyproject_path = Path("pyproject.toml")
-    if not pyproject_path.exists():
-        logger.warning(f"No pyproject.toml found at {pyproject_path}")
-        return
-
-    with open(pyproject_path, "rb") as f:
-        pyproject = tomli.load(f)
-
-    version = pyproject["project"]["version"]
-    logger.info(f"Current version: {version}")
-
     if issue_type == "feature":
+        logger.info("Bumping minor version for feature")
         cp_format = subprocess.run(
             [
                 "pdm",
@@ -64,6 +54,7 @@ def bump_version(issue_type: str) -> None:
             capture_output=True,
         )
     else:
+        logger.info(f"Bumping micro version for {issue_type}")
         cp_format = subprocess.run(
             [
                 "pdm",
