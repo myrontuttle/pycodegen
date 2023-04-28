@@ -222,7 +222,15 @@ class Coder:
         tester.create_test_dirs(self.repo_path)
 
         venv_path = self.repo_path.joinpath(".venv")
-        # TODO: Use appropriate python version in following subprocesses
+        # Get python version from pyproject.toml
+        pyproject_path = self.repo_path.joinpath("pyproject.toml")
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as pyproject:
+                project_conf = tomli.load(pyproject)
+                requires = project_conf["project"]["requires-python"]
+                python_version = requires.replace(">", "").replace("=", "")
+        else:
+            python_version = "3.9"
         if not venv_path.exists():
             os.chdir(self.repo_path)
             cp_setup = subprocess.run(
@@ -230,7 +238,7 @@ class Coder:
                     "pdm",
                     "venv",
                     "create",
-                    "3.9",
+                    f"{python_version}",
                     "-v",
                 ],
                 capture_output=True,
@@ -249,7 +257,7 @@ class Coder:
                 [
                     "pdm",
                     "use",
-                    "3.9",
+                    f"{python_version}",
                     "-i",
                     "-f",
                     "-vv",

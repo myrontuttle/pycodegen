@@ -29,7 +29,8 @@ def test_clone_checkout_and_commit() -> None:
     else:
         with open(test_file_path, "w") as fp:
             fp.write("This is the first line\n")
-    sc.add_and_commit(repo, [test_file], "chore:Test commit")
+    sc.add_files(repo, [test_file])
+    sc.commit(repo, "chore:Test commit")
     assert not repo.is_dirty(untracked_files=True)
 
     sc.safe_merge(repo, branch_name)
