@@ -34,6 +34,50 @@ LOGGER_CODE = (
 )
 
 
+def bump_version(issue_type: str) -> None:
+    """
+    Bumps the version in pyproject.toml based on issue type
+    Args:
+        issue_type: The type of issue that was worked on
+
+    Returns:
+        None
+    """
+    pyproject_path = Path("pyproject.toml")
+    if not pyproject_path.exists():
+        logger.warning(f"No pyproject.toml found at {pyproject_path}")
+        return
+
+    with open(pyproject_path, "rb") as f:
+        pyproject = tomli.load(f)
+
+    version = pyproject["project"]["version"]
+    logger.info(f"Current version: {version}")
+
+    if issue_type == "feature":
+        cp_format = subprocess.run(
+            [
+                "pdm",
+                "bump",
+                "minor",
+            ],
+            capture_output=True,
+        )
+    else:
+        cp_format = subprocess.run(
+            [
+                "pdm",
+                "bump",
+                "micro",
+            ],
+            capture_output=True,
+        )
+    if cp_format.returncode == 0:
+        logger.info(cp_format.stdout)
+    else:
+        logger.error(cp_format.stderr)
+
+
 def just_the_code(llm_text: str) -> Optional[str]:
     """
     Returns just the code portion of an LLM response.
@@ -318,7 +362,15 @@ class Coder:
         Returns:
             Completion response code
         """
+        # Make sure were in repo root dir
         os.chdir(self.repo_path)
+
+        # Auto increment version based on branch name
+        branch_name = sc.get_active_branch_name(self.repo)
+        issue_type = todo.issue_type_from_branch_name(branch_name)
+        bump_version(issue_type)
+
+        # Format code
         cp_format = subprocess.run(
             [
                 "make",
