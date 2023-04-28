@@ -35,17 +35,20 @@ pipx install git+https://github.com/myrontuttle/pycodegen.git
 ## Usage
 
 ```python
-import pycodegen
+from pycodegen.coder import Coder
 
-coder = Coder(repo_owner, repo_name)
-response_code = coder.open_issue(issue_num)
+coder = Coder("repo_owner", "repo_name")
+issue_number = 1
+open_response_code = coder.open_issue(issue_number)
+code_response_code = coder.start_coding()
 # Work on issue
-response_code = coder.finish_issue(commit_msg)
+finish_response_code = coder.finish_issue("commit_msg")
 ```
 
-If installed with pipx
+Command line (install with pipx)
 ```bash
 coder start <githubaccount> <project> [-i <issuenumber>]
+coder code <githubaccount> <project>
 # Work on issue
 coder finish <githubaccount> <project> [-m "<commit message>"]
 ```

@@ -354,3 +354,23 @@ def delete_branch(repo: Repo, branch_name: str) -> None:
         repo.git.branch("-D", branch_name)
     except git.exc.GitCommandError as gce:
         logger.error("Git commit command error: " + str(gce))
+
+
+def undo_changes(repo: Repo) -> None:
+    """
+    Undoes all uncommitted changes
+    Args:
+        repo
+
+    Returns:
+        None
+    """
+    try:
+        branch_name = get_active_branch_name(repo)
+        use_branch(repo, "main")
+        repo.git.reset("--hard")
+        repo.git.clean("-fd")
+        if branch_name != "main":
+            delete_branch(repo, branch_name)
+    except git.exc.GitCommandError as gce:
+        logger.error("Git commit command error: " + str(gce))

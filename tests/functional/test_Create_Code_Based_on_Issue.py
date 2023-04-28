@@ -2,7 +2,7 @@
 
 from pytest_bdd import given, scenario, then, when
 
-from pycodegen import sc
+from pycodegen import sc, todo
 from pycodegen.coder import Coder
 
 repo_owner = "myrontuttle"
@@ -31,8 +31,9 @@ def get_open_issue():
 def issue_and_file():
     """I provide the text of the issue and a file to add code to."""
     coder = Coder(repo_owner, test_repo)
-    file_name = coder.recommend_filename(test_issue_num)
-    coder.write_src_code(test_issue_num, file_name)
+    issue = todo.get_issue(coder.repo, test_issue_num)
+    file_name = coder.recommend_filename(issue)
+    coder.write_src_code(issue, file_name)
     files_created.append(file_name)
 
 

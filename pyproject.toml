@@ -6,7 +6,7 @@ build-backend = "pdm.pep517.api"
 
 [project]
 name = "pycodegen"
-version = "0.2.5"
+version = "0.4.0"
 description = "Python Code Generator"
 authors = [
     { name = "Myron Tuttle", email = "myrongt@gmail.com" },
@@ -45,7 +45,7 @@ text = "MIT"
 Homepage = "https://github.com/myrontuttle/pycodegen"
 
 [project.scripts]
-coder = "pycodegen.coder:code"
+coder = "pycodegen.coder:cli"
 
 [tool.pdm.version]
 source = "scm"

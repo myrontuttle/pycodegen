@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 import tomli
+from github.Issue import Issue
 from pathvalidate import sanitize_filename
 
 from pycodegen import llm, sc, tester, todo
@@ -169,11 +170,11 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-def code():
+def cli():
     pass
 
 
-@code.command()
+@cli.command()
 @click.argument("repo_owner")
 @click.argument("repo_name")
 @click.option("-i", "--issue_num", type=int)
@@ -184,7 +185,17 @@ def start(repo_owner: str, repo_name: str, issue_num: Optional[int]) -> None:
         click.echo("Successfully started issue")
 
 
-@code.command()
+@cli.command()
+@click.argument("repo_owner")
+@click.argument("repo_name")
+def code(repo_owner: str, repo_name: str) -> None:
+    coder = Coder(repo_owner, repo_name)
+    response = coder.start_coding()
+    if response == 0:
+        click.echo("Successfully started coding")
+
+
+@cli.command()
 @click.argument("repo_owner")
 @click.argument("repo_name")
 @click.option(
@@ -307,12 +318,31 @@ class Coder:
         sc.use_branch(self.repo, branch_name)
         logger.info(f"Created branch {branch_name}")
 
+        return 0
+
+    def start_coding(self) -> int:
+        """Start coding on an issue"""
+        # Get issue from branch name
+        branch_name = sc.get_active_branch_name(self.repo)
+        if branch_name == "main":
+            logger.error("Cannot code on main branch. Start an issue first")
+            return 1
+        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
+        issue_num = int(todo.issue_num_from_branch_name(branch_name))
+        if not issue_num:
+            logger.error(
+                "Could not get issue number from branch name. "
+                "Start an issue first"
+            )
+            return 1
+        issue = todo.get_issue(github_repo, issue_num)
+
         # TODO: Account for multiple packages, no package, or package name
         #  different from repo name
         package_name = self.repo_name.replace("-", "_")
 
         # Recommend module to work with
-        src_file_name = self.recommend_filename(issue_num, package_name)
+        src_file_name = self.recommend_filename(issue, package_name)
         logger.info(f"Recommended source file {src_file_name}")
 
         # Create unit tests if bug or feature
@@ -343,13 +373,13 @@ class Coder:
                 logger.info(f"Created functional test file {test_path}")
 
         # Recommended library
-        libs = self.recommend_libraries(issue_num)
+        libs = self.recommend_libraries(issue)
         best_lib = ""
         if libs:
             best_lib = list(libs)[0]
 
         # Start writing code for the issue
-        self.write_src_code(issue_num, src_file_name, unit_tests, best_lib)
+        self.write_src_code(issue, src_file_name, unit_tests, best_lib)
 
         return 0
 
@@ -415,18 +445,15 @@ class Coder:
         logger.info(f"Deleted branch {branch_name}")
         return 0
 
-    def recommend_libraries(self, issue_num: int) -> Optional[Dict[str, str]]:
+    def recommend_libraries(self, issue: Issue) -> Optional[Dict[str, str]]:
         """
         Recommends a library based on an issue
         Args:
-            issue_num
+            issue
 
         Returns:
             Recommended library
         """
-        # Get Issue
-        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
-        issue = todo.get_issue(github_repo, issue_num)
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM what libraries it would recommend for issue
         prompt = (
@@ -441,7 +468,7 @@ class Coder:
         if not response:
             return None
 
-        click.echo(f"Recommended Libraries for issue #{str(issue_num)}:")
+        click.echo(f"Recommended Libraries for issue #{str(issue.number)}:")
         click.echo(response)
         response = response[response.find("{") : response.find("}") + 1]
         if response.find("': ") != -1:
@@ -457,9 +484,9 @@ class Coder:
         rec_list = " or ".join(recommendations.keys())
         # TODO: Do this with a web search to get current best practices
         alt_prompt = (
-            f"In the form of a python dictionary, what are some "
+            f"In the form of a JSON object, what are some "
             f"alternative python libraries to using {rec_list}? "
-            f"Respond in the form of a python dictionary with each "
+            f"Respond in the form of a JSON object with each "
             f"library name as the key and a string of two "
             f"sentences describing the library and why to use it "
             f"for this ticket as the value."
@@ -518,19 +545,16 @@ class Coder:
         else:
             logger.error(cp_add_lib.stderr)
 
-    def recommend_filename(self, issue_num: int, pkg_name="") -> str:
+    def recommend_filename(self, issue: Issue, pkg_name="") -> str:
         """
         Recommend a filename to create or add to for the issue
         Args:
-            issue_num: Issue number
+            issue: Issue
             pkg_name: Package name
 
         Returns:
             Filename
         """
-        # Get Issue
-        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
-        issue = todo.get_issue(github_repo, issue_num)
         # Get existing src files
         if not pkg_name:
             # Assume package name same as repo name
@@ -572,18 +596,18 @@ class Coder:
             return response
         else:
             logger.error(
-                f"No file name recommended for issue #: {issue_num}."
+                f"No file name recommended for issue #: {issue.number}."
                 f"Using {TEMP_FILE}."
             )
             return TEMP_FILE
 
     def write_src_code(
-        self, issue_num: int, src_file_name: str, unit_tests="", lib_name=""
+        self, issue: Issue, src_file_name: str, unit_tests="", lib_name=""
     ) -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
         Args:
-            issue_num
+            issue
             src_file_name
             unit_tests
             lib_name
@@ -591,10 +615,6 @@ class Coder:
         Returns:
             None
         """
-        # Get Issue
-        github_repo = todo.get_repo(self.repo_owner, self.repo_name)
-        issue = todo.get_issue(github_repo, issue_num)
-
         # Get existing file header
         src_file_path = (
             self.repo_path.joinpath("src")
@@ -658,4 +678,4 @@ class Coder:
 
 
 if __name__ == "__main__":
-    code()
+    cli()
