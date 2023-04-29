@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import logging
 import os
@@ -6,6 +6,7 @@ import os
 from github import Github
 from github.GithubException import GithubException
 from github.Issue import Issue
+from github.IssueComment import IssueComment
 from github.Repository import Repository
 
 logging.basicConfig(
@@ -186,3 +187,31 @@ def get_issue_type_from_prefix(issue_prefix: str) -> str:
         return docs_type
     else:
         return chore_type
+
+
+def get_issue_comments(issue: Issue) -> Optional[List[str]]:
+    """Returns a list of comments for an issue"""
+    if not issue:
+        return None
+    comments = [comment.body for comment in issue.get_comments()]
+    return comments
+
+
+def write_issue_comment(issue: Issue, comment: str) -> Optional[IssueComment]:
+    """Writes a comment to an issue"""
+    if not issue:
+        return None
+    return issue.create_comment(comment)
+
+
+def delete_last_issue_comment(issue: Issue) -> Optional[IssueComment]:
+    """Deletes the last comment on an issue"""
+    if not issue:
+        return None
+    comments = issue.get_comments()
+    if not comments:
+        return None
+    num_comments = comments.totalCount
+    last_comment = comments[num_comments - 1]
+    last_comment.delete()
+    return last_comment

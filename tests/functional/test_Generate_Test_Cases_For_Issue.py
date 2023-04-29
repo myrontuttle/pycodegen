@@ -35,5 +35,12 @@ def generate_test_cases():
     issue = github_repo.get_issue(test_issue_num)
     issue_body = issue.body
     issue_type = todo.get_issue_type(github_repo, issue)
-    test_path = tester.create_unit_tests(repo_path, issue_body, issue_type)
-    assert test_path.exists()
+    src_file_name = "webpage.py"
+    package_name = "test_project"
+    test_path = tester.create_unit_tests(
+        src_file_name,
+        issue_body,
+        issue_type,
+        package_name,
+    )
+    assert Path(test_path).exists()

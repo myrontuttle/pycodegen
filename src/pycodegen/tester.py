@@ -261,7 +261,7 @@ def create_unit_tests(
         unit test file path
     """
     source_module = src_file_name[: src_file_name.find(".")]
-    chat = ChatOpenAI(model_name="gpt-3.5-turbo")
+    chat = ChatOpenAI(model_name=llm.CHAT_MODEL)
     role_template = (
         "You are a great QA engineer preparing a suite of unit "
         "tests for Test Driven Development."

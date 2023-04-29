@@ -33,6 +33,52 @@ LOGGER_CODE = (
     "    datefmt='%Y-%m-%d %H:%M:%S'\n)\n\n"
     "logger = logging.getLogger(__name__)\n\n"
 )
+AI_COMMENT_TAG = "AI: "
+NO_QUESTIONS = "No questions."
+
+
+def review_comments(issue: Issue) -> int:
+    """Review issue comments and take appropriate action"""
+    comments = todo.get_issue_comments(issue)
+    # Check if AI has already commented and gotten a response
+    for idx, comment in enumerate(comments):
+        if comment.startswith(AI_COMMENT_TAG):
+            if len(comments) == idx + 1:  # Last comment
+                if comment.find("?") == -1:
+                    # AI has commented and has no questions
+                    click.echo(f"No questions for issue #{issue.number}")
+                    click.echo(f"Last comment: {comment}")
+                    return 0
+                # AI has commented, but needs a response
+                click.echo(
+                    "AI: Waiting for response from user in "
+                    f"comments on issue #{issue.number}"
+                )
+                return 1
+            else:
+                # AI has commented and gotten a response
+                return 0
+    # AI has not commented yet
+    for comment in comments:
+        if comment.find("http://") != -1 or comment.find("https://") != -1:
+            # TODO: Read linked page and act accordingly
+            pass
+    # AI ask questions about issue body and comments
+    all_comments = "\n".join(comments)
+    prompt = (
+        f"What are the top questions that should be asked about the "
+        f"following issue in order to develop an effective solution?\n"
+        f"{issue.title}\n{issue.body}\n{all_comments}\n"
+    )
+    response = llm.complete_prompt(prompt)
+    if response:
+        todo.write_issue_comment(issue, AI_COMMENT_TAG + response)
+        click.echo(f"Issue #{str(issue.number)}: {issue.title}")
+        click.echo(AI_COMMENT_TAG + response)
+        return 1
+    else:
+        logger.warning(f"No response from Chat LLM when asking:\n{prompt}")
+        return 0
 
 
 def bump_version(issue_type: str) -> None:
@@ -108,6 +154,7 @@ def add_text_to_module(module_text: str, text_to_add: str) -> str:
     Returns:
         Updated module text
     """
+    # TODO: Add any imports to the top of the module
     class_loc = module_text.find("class ")
     main_loc = module_text.find('if __name__ == "__main__":')
     if class_loc != -1:
@@ -306,6 +353,11 @@ class Coder:
             return 1
         logger.info(f"Working on issue {issue.number}: {issue.title}")
 
+        # Review issue comments
+        rc = review_comments(issue)
+        if rc != 0:
+            return rc
+
         # Pull repo
         if self.repo.active_branch.name == "main":
             self.repo.git.pull()
@@ -336,6 +388,15 @@ class Coder:
             )
             return 1
         issue = todo.get_issue(github_repo, issue_num)
+        issue_type = todo.get_issue_type(github_repo, issue)
+
+        # Create functional test if new feature
+        if issue_type == "feature":
+            feature_path = tester.create_feature(self.repo_path, issue)
+            logger.info(f"Created feature file {feature_path}")
+            func_test_path = tester.create_step_defs(feature_path)
+            if func_test_path:
+                logger.info(f"Created functional test file {func_test_path}")
 
         # TODO: Account for multiple packages, no package, or package name
         #  different from repo name
@@ -346,7 +407,6 @@ class Coder:
         logger.info(f"Recommended source file {src_file_name}")
 
         # Create unit tests if bug or feature
-        issue_type = todo.get_issue_type(github_repo, issue)
         if issue_type == "bug" or issue_type == "feature":
             unit_tests = tester.create_unit_tests(
                 src_file_name,
@@ -354,23 +414,15 @@ class Coder:
                 issue_type,
                 package_name,
             )
-            test_path = tester.write_unit_tests_to_file(
+            unit_test_path = tester.write_unit_tests_to_file(
                 self.repo_path,
                 src_file_name,
                 unit_tests,
             )
-            logger.info(f"Created test file {test_path}")
+            logger.info(f"Created/updated test file {unit_test_path}")
         else:
             unit_tests = ""
             logger.info(f"No unit tests created for issue_type={issue_type}")
-
-        # Create functional test if new feature
-        if issue_type == "feature":
-            feature_path = tester.create_feature(self.repo_path, issue)
-            logger.info(f"Created feature file {feature_path}")
-            test_path = tester.create_step_defs(feature_path)
-            if test_path:
-                logger.info(f"Created functional test file {test_path}")
 
         # Recommended library
         libs = self.recommend_libraries(issue)
@@ -625,12 +677,6 @@ class Coder:
         if src_file_path.exists():
             with open(src_file_path, "r") as fp:
                 src_file_contents = fp.read()
-        file_header = ""
-        if src_file_contents:
-            file_header = (
-                "The existing source file starts with:\n"
-                + src_file_contents[: src_file_contents.find("def")]
-            )
 
         # Get unit tests that the code should pass
         unit_test_prompt = ""
@@ -654,13 +700,10 @@ class Coder:
             f"{use_lib}\n\n"
             f"{unit_test_prompt}\n"
             f"Respond with just the python code.\n"
-            f"{file_header}"
         )
         response: str = llm.complete_prompt(prompt)
         if response:
             if src_file_contents:
-                # Remove existing source file header from response
-                response = response.replace(file_header, "")
                 src_file_contents = add_text_to_module(
                     src_file_contents,
                     just_the_code(response),
