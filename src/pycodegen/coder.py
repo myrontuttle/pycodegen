@@ -11,6 +11,14 @@ from pathlib import Path
 import click
 import tomli
 from github.Issue import Issue
+from langchain.chains import LLMChain, SequentialChain
+from langchain.chat_models import ChatOpenAI
+from langchain.memory import SimpleMemory
+from langchain.prompts import PromptTemplate
+from langchain.prompts.chat import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+)
 from pathvalidate import sanitize_filename
 
 from pycodegen import llm, sc, tester, todo
@@ -431,7 +439,14 @@ class Coder:
             best_lib = list(libs)[0]
 
         # Start writing code for the issue
-        self.write_src_code(issue, src_file_name, unit_tests, best_lib)
+        self.write_src_code(
+            issue,
+            issue_type,
+            src_file_name,
+            package_name,
+            unit_tests,
+            best_lib,
+        )
 
         return 0
 
@@ -607,7 +622,7 @@ class Coder:
         Returns:
             Filename
         """
-        # Get existing src files
+        # Get existing src file
         if not pkg_name:
             # Assume package name same as repo name
             pkg_name = self.repo_name.replace("-", "_")
@@ -654,30 +669,94 @@ class Coder:
             return TEMP_FILE
 
     def write_src_code(
-        self, issue: Issue, src_file_name: str, unit_tests="", lib_name=""
+        self,
+        issue: Issue,
+        issue_type: str,
+        src_file_name: str,
+        package_name="",
+        unit_tests="",
+        lib_name="",
     ) -> None:
         """
         Writes code to the file provided (creating if it doesn't exist)
         Args:
-            issue
-            src_file_name
-            unit_tests
-            lib_name
+            issue: Issue
+            issue_type: Issue type
+            src_file_name: Source file name
+            package_name: Package name
+            unit_tests: Unit tests
+            lib_name: Library name
 
         Returns:
             None
         """
-        # Get existing file header
-        src_file_path = (
-            self.repo_path.joinpath("src")
-            .joinpath(self.repo_name.replace("-", "_"))
-            .joinpath(src_file_name)
+        chat = ChatOpenAI(model_name=llm.CHAT_MODEL)
+        role_template = "You are a thoughtful software developer."
+
+        # Plan steps for issue solution
+        steps_template = (
+            "{role} Evaluate the following {issue_type} and comments. "
+            "Return a list of the steps you would take to solve it.\n"
+            "Issue: {issue_body}"
+        )
+        steps_prompt = HumanMessagePromptTemplate(
+            prompt=PromptTemplate.from_template(steps_template)
+        )
+        steps_chat = ChatPromptTemplate.from_messages([steps_prompt])
+        steps_chain = LLMChain(
+            llm=chat,
+            prompt=steps_chat,
+            output_key="solution_steps",
+        )
+        # Critique steps
+        critique_template = (
+            "{role} Compare the list of steps with the "
+            "{issue_type}. Which steps are redundant, incorrect, or can be "
+            "simplified?\nIssue: {issue_body}\n"
+            "Steps:\n{solution_steps}"
+        )
+        critique_prompt = HumanMessagePromptTemplate(
+            prompt=PromptTemplate.from_template(critique_template)
+        )
+        critique_chat = ChatPromptTemplate.from_messages([critique_prompt])
+        critique_chain = LLMChain(
+            llm=chat,
+            prompt=critique_chat,
+            output_key="critique",
+        )
+        # Write updated steps
+        update_template = (
+            "{role}\n"
+            "For a solution to this {issue_type}: {issue_body}\n"
+            "You wrote steps:\n{solution_steps}"
+            "You critiqued the steps:\n{critique}"
+            "Write what the steps should be (if there are no "
+            "changes needed, please repeat the steps):\n"
+        )
+        update_prompt = HumanMessagePromptTemplate(
+            prompt=PromptTemplate.from_template(update_template)
+        )
+        update_chat = ChatPromptTemplate.from_messages([update_prompt])
+        update_chain = LLMChain(
+            llm=chat,
+            prompt=update_chat,
+            output_key="updated_steps",
+        )
+        # Get existing imports
+        src_file_path = self.repo_path.joinpath(
+            "src", package_name, src_file_name
         )
         src_file_contents = ""
         if src_file_path.exists():
             with open(src_file_path, "r") as fp:
                 src_file_contents = fp.read()
-
+        if src_file_contents:
+            # Get existing imports in file
+            existing_imports = [
+                line
+                for line in src_file_contents.split("\n")
+                if line.startswith("import") or line.startswith("from")
+            ]
         # Get unit tests that the code should pass
         unit_test_prompt = ""
         if unit_tests:
@@ -690,6 +769,62 @@ class Coder:
         use_lib = ""
         if lib_name:
             use_lib = f"Use {lib_name} in the solution."
+
+        # Write source code
+        source_template = (
+            "{role} Write python code for the "
+            "following steps:\n{updated_steps}\n"
+            f"Issue: {issue.title}\n{issue.body}\n\n"
+            f"{use_lib}\n\n"
+            f"{unit_test_prompt}\n"
+            f"Respond with just the python code.\n"
+            "Good unit tests should be independent, "
+            "deterministic, self-validating, "
+            "isolated, reproducible, and take advantage of the "
+            "features of pytest to make the tests easy to "
+            "write and maintain. For the module under test use the name "
+            "'{source_module}' in the '{package_name}' package (for example: "
+            "from {package_name} import {source_module})."
+        )
+        source_prompt = HumanMessagePromptTemplate(
+            prompt=PromptTemplate.from_template(source_template)
+        )
+        source_chat = ChatPromptTemplate.from_messages([source_prompt])
+        source_chain = LLMChain(
+            llm=chat,
+            prompt=source_chat,
+            output_key="source_code",
+        )
+        create_tests_chain = SequentialChain(
+            memory=SimpleMemory(memories={"role": role_template}),
+            chains=[
+                steps_chain,
+                critique_chain,
+                update_chain,
+                source_chain,
+            ],
+            input_variables=[
+                "issue_body",
+                "issue_type",
+                "source_module",
+                "package_name",
+            ],
+            output_variables=[
+                "test_cases",
+                "critique",
+                "updated_test_cases",
+                "unit_tests",
+            ],
+            verbose=True,
+        )
+        create_tests_chain(
+            {
+                "issue_body": issue.body,
+                "issue_type": issue_type,
+                "source_module": source_module,
+                "package_name": package_name,
+            }
+        )
 
         # TODO: Consider adding project description for context in prompt
         # Ask Chat LLM to provide code for issue
