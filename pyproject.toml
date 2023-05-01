@@ -6,7 +6,7 @@ build-backend = "pdm.pep517.api"
 
 [project]
 name = "pycodegen"
-version = "0.5.0"
+version = "0.5.1"
 description = "Python Code Generator"
 authors = [
     { name = "Myron Tuttle", email = "myrongt@gmail.com" },

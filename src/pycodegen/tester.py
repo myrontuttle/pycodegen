@@ -324,9 +324,11 @@ def create_unit_tests(
         "deterministic, self-validating, "
         "isolated, reproducible, and take advantage of the "
         "features of pytest to make the tests easy to "
-        "write and maintain. For the module under test use the name "
+        "write and maintain. Any explanation for the tests should be made "
+        "as comments in python. For the module under test use the name "
         "'{source_module}' in the '{package_name}' package (for example: "
-        "from {package_name} import {source_module})."
+        "from {package_name} import {source_module}). Return just the "
+        "python code for the unit tests."
     )
     unit_test_prompt = HumanMessagePromptTemplate(
         prompt=PromptTemplate.from_template(unit_test_template)
