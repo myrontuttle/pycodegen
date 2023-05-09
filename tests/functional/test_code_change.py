@@ -92,3 +92,22 @@ def test_open_issue() -> None:
     this_repo = "pycodegen"
     coder = Coder(this_owner, this_repo)
     coder.open_issue(34)
+
+
+def test_get_issue_comments():
+    repo = todo.get_repo("myrontuttle", "test_project")
+    issue = todo.get_issue(repo, 3)
+    comments = todo.get_issue_comments(issue)
+    assert comments
+    assert comments[0] == "Re-opening for further testing"
+
+
+def test_write_issue_comment():
+    repo = todo.get_repo("myrontuttle", "test_project")
+    issue = todo.get_issue(repo, 3)
+    comment = "This is a test comment"
+    todo.write_issue_comment(issue, comment)
+    comments = todo.get_issue_comments(issue)
+    assert comments
+    assert comments[-1] == comment
+    todo.delete_last_issue_comment(issue)
