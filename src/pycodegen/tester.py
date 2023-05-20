@@ -192,6 +192,7 @@ def create_step_defs(feature_path: Path) -> Optional[Path]:
             logger.error(cp_step_def.stderr)
     except FileNotFoundError as err:
         logger.error(err)
+        logger.error(f"Feature file {feature_path} not found.")
 
 
 def fix_step_def_functions(test_path: Path) -> None:

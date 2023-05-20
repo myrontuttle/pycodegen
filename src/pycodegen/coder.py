@@ -399,7 +399,7 @@ class Coder:
         issue_type = todo.get_issue_type(github_repo, issue)
 
         # Create functional test if new feature
-        if issue_type == "feature":
+        if issue_type == todo.feature_type:
             feature_path = tester.create_feature(self.repo_path, issue)
             logger.info(f"Created feature file {feature_path}")
             func_test_path = tester.create_step_defs(feature_path)
