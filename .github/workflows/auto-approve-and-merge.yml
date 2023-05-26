@@ -2,9 +2,10 @@ name: Auto approve and merge PRs by dependabot
 
 # Trigger the workflow on pull request
 on:
-  pull_request
+  pull_request_target
 
 permissions:
+  contents: write
   pull-requests: write
 
 jobs:
