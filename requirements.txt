@@ -30,5 +30,5 @@ tiktoken==0.5.1
 tomli==2.0.1
 tqdm==4.66.1
 urllib3==2.1.0
-wrapt==1.15.0
+wrapt==1.16.0
 yarl==1.9.2
