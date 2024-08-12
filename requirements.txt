@@ -4,7 +4,7 @@ async-timeout==4.0.3
 attrs==24.1.0
 backoff==2.2.1
 certifi==2024.7.4
-cffi==1.16.0
+cffi==1.17.0
 charset-normalizer==3.3.2
 click==8.1.7
 colorama==0.4.6
