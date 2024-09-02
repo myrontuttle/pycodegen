@@ -31,4 +31,4 @@ tomli==2.0.1
 tqdm==4.66.5
 urllib3==2.2.2
 wrapt==1.16.0
-yarl==1.9.4
+yarl==1.9.7
