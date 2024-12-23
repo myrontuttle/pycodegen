@@ -29,6 +29,6 @@ smmap==5.0.1
 tiktoken==0.8.0
 tomli==2.2.1
 tqdm==4.67.1
-urllib3==2.2.3
+urllib3==2.3.0
 wrapt==1.17.0
 yarl==1.18.3
