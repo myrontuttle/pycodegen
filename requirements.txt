@@ -16,7 +16,7 @@ GitPython==3.1.43
 idna==3.10
 multidict==6.1.0
 openai==1.58.1
-pathvalidate==3.2.1
+pathvalidate==3.2.3
 pycparser==2.22
 PyGithub==2.5.0
 pyjwt==2.10.1
