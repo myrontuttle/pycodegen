@@ -18,7 +18,7 @@ multidict==6.6.3
 openai==1.98.0
 pathvalidate==3.3.1
 pycparser==2.22
-PyGithub==2.6.1
+PyGithub==2.7.0
 pyjwt==2.10.1
 pynacl==1.5.0
 ratelimit==2.2.1
