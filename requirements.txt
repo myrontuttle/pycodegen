@@ -1,7 +1,7 @@
 aiohttp==3.12.15
 aiosignal==1.4.0
 async-timeout==5.0.1
-attrs==25.3.0
+attrs==25.4.0
 backoff==2.2.1
 certifi==2025.8.3
 cffi==2.0.0
