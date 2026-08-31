@@ -15,7 +15,7 @@ gitdb==4.0.12
 GitPython==3.1.59
 idna==3.19
 multidict==6.7.1
-openai==3.3.1
+openai==3.5.0
 pathvalidate==3.3.1
 pycparser==3.0
 PyGithub==2.10.0
