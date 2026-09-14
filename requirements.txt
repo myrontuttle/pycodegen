@@ -28,7 +28,7 @@ reretry==0.11.8
 smmap==5.0.3
 tiktoken==0.14.0
 tomli==2.4.1
-tqdm==4.70.0
+tqdm==4.70.1
 urllib3==2.7.0
 wrapt==2.4.0
 yarl==1.24.5
